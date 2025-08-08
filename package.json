@@ -32,6 +32,7 @@
     "maplibre-contour": "^0.1.0",
     "pmtiles": "^4.1.0",
     "sharp": "^0.33.5",
+    "sqlite3": "^5.1.7",
     "tsx": "^4.19.2"
   },
   "devDependencies": {

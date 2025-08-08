@@ -2,6 +2,8 @@ import fs from "node:fs";
 import { PMTiles, FetchSource, type Source } from "pmtiles";
 const httpTester = /^https?:\/\//i;
 
+export const pmtilesTester = /^pmtiles:\/\//i;
+
 export class PMTilesFileSource implements Source {
   private fd: number;
 
