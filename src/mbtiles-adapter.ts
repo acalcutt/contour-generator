@@ -60,6 +60,7 @@ async function getMbtilesFormat(db: sqlite3.Database): Promise<string | undefine
 // Function to open an MBTiles file and return a reader
 export async function openMbtiles(mbtilesUrl: string): Promise<MbtilesReader> {
   const filePath = path.normalize(mbtilesUrl.replace(mbtilesTester, ""));
+  console.log(filePath);
 
   return new Promise((resolve, reject) => {
     const db = new sqlite3.Database(filePath, sqlite3.OPEN_READONLY, (err) => {
