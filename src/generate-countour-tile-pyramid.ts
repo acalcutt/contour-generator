@@ -247,6 +247,8 @@ const setupDemManagerGetTile = async (
       return { data: blob, expires: undefined, cacheControl: undefined };
     };
   } else if (sourceType === "mbtiles") {
+    try {
+      console.log(sourceUrl)
       mbtilesReader = await openMbtiles(sourceUrl);
 
       demManagerOptions.demUrlPattern = "/{z}/{x}/{y}";
@@ -258,7 +260,10 @@ const setupDemManagerGetTile = async (
         return mbtilesReader.getTile(zxy.z, zxy.x, zxy.y);
       };
       console.log("MBTiles reader and getTile function configured.");
-
+    } catch (error: any) {
+      console.error(`Failed to initialize MBTiles reader: ${error.message}`);
+      process.exit(1);
+    }
   } else {
     console.log("Using regular tile URL source.");
     demManagerOptions.demUrlPattern = sourceUrl;
