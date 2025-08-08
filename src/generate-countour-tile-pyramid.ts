@@ -250,6 +250,7 @@ const setupDemManagerGetTile = async (
     try {
       console.log(sourceUrl)
       mbtilesReader = await openMbtiles(sourceUrl);
+      console.log(mbtilesReader)
 
       demManagerOptions.demUrlPattern = "/{z}/{x}/{y}";
       demManagerOptions.getTile = async (url: string, _abortController: AbortController) => {
