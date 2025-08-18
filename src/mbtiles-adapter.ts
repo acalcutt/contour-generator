@@ -1,4 +1,4 @@
-import mbtiles from "@mapbox/mbtiles";
+import MBTiles from "@mapbox/mbtiles";
 import { promisify } from "util";
 import { existsSync } from "fs";
 
@@ -9,7 +9,7 @@ export const mbtilesTester = /^mbtiles:\/\//i;
 // The promisified version will take path, options and return a Promise.
 const MBTilesConstructorPromise = promisify(function(FilePath: string, options: any, callback: (err: any, mbtilesHandle: any) => void) {
     // Ensure 'new' is used correctly with the imported MBTiles
-    new mbtiles.MBTiles(FilePath, options, callback);
+    new MBTiles(FilePath, options, callback);
 });
 
 // Promisify getTile. It takes handle, z, x, y, callback.
