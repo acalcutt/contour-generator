@@ -8,8 +8,9 @@ import {
   getOptionsForZoom,
   createBlankTileImage,
 } from "./mlcontour-adapter";
-import { getPMtilesTile, openPMtiles, pmtilesTester } from "./pmtiles-adapter";
-// Import MBTiles adapter functions, tester, AND the object structure from openMBTiles
+// Import PMTiles adapter functions AND the tester
+import { getPMtilesTile, openPMtiles, pmtilesTester, getPMTilesMimeType } from "./pmtiles-adapter";
+// Import MBTiles adapter functions, tester, AND the metadata structure from openMBTiles
 import { openMBTiles, getMBTilesTile, mbtilesTester } from "./mbtiles-adapter";
 
 import { getChildren } from "@mapbox/tilebelt";
@@ -167,8 +168,8 @@ function getAllTiles(tile: Tile, outputMaxZoom: number): Tile[] {
 // --------------------------------------------------
 
 let pmtilesSource: PMTiles | undefined;
-let mbtilesSource: any | undefined;
-// Store the result of openMBTiles which now includes handle and metadata (format)
+let mbtilesSource: { handle: any; metadata?: { format?: string } } | undefined;
+// Store the result of openMBTiles which now includes handle and metadata
 let mbtilesSourceInfo: { handle: any; metadata?: { format?: string } } | undefined;
 
 interface TileFetcherResult {
@@ -192,8 +193,8 @@ const pmtilesFetcher: TileFetcher = async (url: string, _abortController: AbortC
     throw new Error(`Could not extract zxy from ${url}`);
   }
 
-  // Get tile data AND its MIME type from the PMTiles adapter
-  // The mimeType is fetched from the header by getPMtilesTile and returned.
+  // Get tile data AND its MIME type from the PMTiles adapter.
+  // The mimeType is fetched from the header by getPMtilesTile.
   const { data: zxyTileData, mimeType: pmtilesMimeType } = await getPMtilesTile(pmtilesSource, $zxy.z, $zxy.x, $zxy.y);
 
   if (!zxyTileData) { // Tile not found
@@ -264,7 +265,7 @@ const mbtilesFetcher: TileFetcher = async (url: string, abortController: AbortCo
     if (error.message.includes("Tile does not exist") || error.message.includes("no such row")) {
         console.warn(`DEM tile not found for ${url} (z:${$zxy.z}, x:${$zxy.x}, y:${$zxy.y}). Generating blank tile.`);
         // Determine the format from MBTiles metadata if available, otherwise use the fallback.
-        const sourceFormat = mbtilesSource?.format || blankTileFormat;
+        const sourceFormat = mbtilesSource.metadata?.format || blankTileFormat;
 
         const blankTileBuffer = await createBlankTileImage(
             numblankTileSize,
@@ -289,29 +290,34 @@ const mbtilesFetcher: TileFetcher = async (url: string, abortController: AbortCo
 let currentFetcher: TileFetcher | undefined;
 let demUrlPattern: string | undefined;
 
-if (pmtilesTester.test(demUrl)) {
-  const pmtilesPath = demUrl.replace(pmtilesTester, "");
-  if (!existsSync(pmtilesPath)) {
-    console.error(`PMTiles file not found at: ${pmtilesPath}`);
-    process.exit(1);
+async function initializeSources() { // Wrap initialization in an async function
+  if (pmtilesTester.test(demUrl)) {
+    const pmtilesPath = demUrl.replace(pmtilesTester, "");
+    if (!existsSync(pmtilesPath)) {
+      console.error(`PMTiles file not found at: ${pmtilesPath}`);
+      process.exit(1);
+    }
+    pmtilesSource = openPMtiles(pmtilesPath);
+    currentFetcher = pmtilesFetcher;
+    demUrlPattern = "/{z}/{x}/{y}";
+  } else if (mbtilesTester.test(demUrl)) {
+    const mbtilesPath = demUrl.replace(mbtilesTester, "");
+    if (!existsSync(mbtilesPath)) {
+      console.error(`MBTiles file not found at: ${mbtilesPath}`);
+      process.exit(1);
+    }
+    // Await the result of openMBTiles because it's now asynchronous
+    mbtilesSource = await openMBTiles(mbtilesPath); // This now returns { handle, metadata }
+    currentFetcher = mbtilesFetcher;
+    demUrlPattern = "/{z}/{x}/{y}";
+  } else {
+    demUrlPattern = demUrl;
+    currentFetcher = undefined;
   }
-  pmtilesSource = openPMtiles(pmtilesPath);
-  currentFetcher = pmtilesFetcher;
-  demUrlPattern = "/{z}/{x}/{y}";
-} else if (mbtilesTester.test(demUrl)) {
-  const mbtilesPath = demUrl.replace(mbtilesTester, "");
-  if (!existsSync(mbtilesPath)) {
-    console.error(`MBTiles file not found at: ${mbtilesPath}`);
-    process.exit(1);
-  }
-  // Open MBTiles and capture its handle and format metadata
-  mbtilesSource = openMBTiles(mbtilesPath); // This returns { handle, metadata }
-  currentFetcher = mbtilesFetcher;
-  demUrlPattern = "/{z}/{x}/{y}";
-} else {
-  demUrlPattern = demUrl;
-  currentFetcher = undefined;
 }
+
+// Call the initialization function before setting up the manager
+await initializeSources();
 
 const demManagerOptions = {
   cacheSize: 100,
@@ -399,6 +405,7 @@ children.sort((a, b) => {
   //If Z and X are equal, sort by Y
   return a[1] - b[1];
 });
+
 
 if (!existsSync(outputDir)) {
   console.log(`Creating output directory: ${outputDir}`);

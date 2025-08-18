@@ -1,44 +1,50 @@
-// mbtiles-adapter.ts
-
 import mbtiles from "@mapbox/mbtiles";
 import { promisify } from "util";
 import { existsSync } from "fs";
 
 export const mbtilesTester = /^mbtiles:\/\//i;
 
-// The getTile method is often asynchronous and callback-based, so promisify it.
-// The correct way to promisify might depend on the exact library structure.
-// Let's assume getTile is a method on the opened MBTiles object.
-// If the library provides an async open method, that would be better.
+// Helper for promisifying mbtiles.MBTiles constructor and its methods.
+// We need to promisify both the constructor and potentially getInfo if it's callback-based.
+// Looking at node-mbtiles, it seems both constructor and getTile/getInfo are callback-based.
+
+// Promisify the constructor itself.
+// The constructor takes path, options, and a callback.
+const MBTilesConstructor = promisify(function(FilePath: string, options: any, callback: (err: any, mbtilesHandle: any) => void) {
+    new mbtiles.MBTiles(FilePath, options, callback);
+});
+
+// Promisify getTile if it's callback-based.
+const getMbtilesTileAsync = promisify(function(mbtilesHandle: any, z: number, x: number, y: number, callback: (err: any, tile: any) => void) {
+    mbtilesHandle.getTile(z, x, y, callback);
+});
+
 
 /**
  * Opens an MBTiles file and returns its handle and metadata.
  * @param FilePath The path to the MBTiles file.
- * @returns An object containing the MBTiles handle and its metadata.
+ * @returns A Promise resolving to an object containing the MBTiles handle and its metadata.
  */
-export function openMBTiles(FilePath: string): { handle: any; metadata?: { format?: string } } {
+export async function openMBTiles(FilePath: string): Promise<{ handle: any; metadata?: { format?: string } }> { // Return a Promise
   if (!existsSync(FilePath)) {
     throw new Error(`MBTiles file not found at: ${FilePath}`);
   }
   try {
-    // *** CORRECTED USAGE: Use mbtiles.open() ***
-    // The 'open' method typically returns the handle and potentially metadata.
-    // Check the documentation for the exact return structure.
-    // A common pattern is:
-    const mbtilesHandle = mbtiles.open(FilePath);
+    // Await the promisified constructor
+    // The constructor itself might be async and return the handle directly or via callback
+    // The promisify of the constructor should yield a function that returns a Promise.
+    const mbtilesHandle = await MBTilesConstructor(FilePath, { readOnly: true }); // Assuming readOnly mode is appropriate
 
-    // If mbtiles.open() itself doesn't directly give metadata, you might need to call getInfo.
-    // Let's assume for now that open() gives you a handle.
-    // The getInfo call within the open function might be the source of the error if it's expecting something else.
+    // Now, get metadata. getInfo is usually callback-based.
+    const getInfoAsync = promisify(mbtilesHandle.getInfo);
+    const info = await getInfoAsync();
 
-    // The original code was trying to use MapboxTileSource, which is likely not the primary export or intended way.
-    // Let's assume mbtiles.open() provides the handle.
-
-    // You still need a way to get metadata and the format.
-    // If mbtiles.open() returns metadata directly, great. If not, we'll need to use getInfo.
-    // Let's refine the getMBTilesInfoSync to be more robust if getInfo is on the handle.
-
-    const metadata = getMBTilesInfoSync(mbtilesHandle); // Call getInfo on the obtained handle
+    let metadata: { format?: string } | undefined = undefined;
+    if (info && info.format) {
+      metadata = { format: info.format };
+    } else {
+      console.warn("Could not retrieve MBTiles format from metadata, falling back to png for blank tiles.");
+    }
 
     return { handle: mbtilesHandle, metadata };
 
@@ -46,23 +52,6 @@ export function openMBTiles(FilePath: string): { handle: any; metadata?: { forma
     console.error(`Failed to open MBTiles file ${FilePath}: ${error.message}`);
     throw error;
   }
-}
-
-// Synchronous helper to get MBTiles info.
-function getMBTilesInfoSync(mbtilesHandle: any): { format?: string } | undefined {
-    try {
-        // Check if getInfo is a method of the handle
-        if (typeof mbtilesHandle.getInfo === 'function') {
-            const info = mbtilesHandle.getInfo(); // getInfo is synchronous
-            return info;
-        } else {
-            console.warn("MBTiles handle does not have a getInfo method.");
-            return undefined;
-        }
-    } catch (e) {
-        console.warn("Could not retrieve MBTiles metadata (format), falling back to png for blank tiles.", e);
-        return undefined; // Return undefined if info retrieval fails
-    }
 }
 
 /**
@@ -74,19 +63,18 @@ function getMBTilesInfoSync(mbtilesHandle: any): { format?: string } | undefined
  * @returns Promise<{data: Buffer | undefined, contentType: string | undefined}>.
  */
 export async function getMBTilesTile(
-  mbtilesHandle: any, // This is the handle, not the full object with metadata
+  mbtilesHandle: any,
   z: number,
   x: number,
   y: number,
 ): Promise<{ data: Buffer | undefined; contentType: string | undefined }> {
   try {
-    // The getTile method is likely on the handle itself.
+    // We already promisified getTileAsync above
     const tileData = await getMbtilesTileAsync(mbtilesHandle, z, x, y);
 
     if (!tileData || !tileData.data) {
       return { data: undefined, contentType: undefined };
     }
-    // Return the contentType from the headers.
     return { data: tileData.data, contentType: tileData.headers?.contentType };
 
   } catch (error: any) {
