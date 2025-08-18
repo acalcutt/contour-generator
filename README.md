@@ -5,9 +5,10 @@ Generates contour tiles in Mapbox Vector Tile (MVT) format from terrain raster-d
 This script outputs tile files in the ```<outputDir>/z/x/y.pbf``` format and generates a ```<outputDir>/metadata.json``` file. These files can be imported using [mbutil](https://github.com/mapbox/mbutil). For example, to import the tiles into an mbtiles file using mbutil, the syntax would be: ```python3 mb-util --image_format=pbf <outputDir> output.mbtiles```.
 
 # Script Parameters
-generate_tiles.sh - Generates contour tiles based on specified function and parameters.
+Generates contour tiles based on specified function and parameters.
 ```
-Usage: ./generate_tiles.sh <function> [options]
+Docker Usage: docker run -it -v $(pwd):/data wifidb/contour-generator <function> [options]
+Local Usage: npm run generate-contours -- <function> [options]
 
 Functions:
   pyramid    generates contours for a parent tile and all child tiles up to a specified max zoom level.
@@ -51,6 +52,10 @@ The docker image wifidb/contour-generator can be used for generating tiles in di
 
 pyramid function (using Docker w/pmtiles https source):
 ```
+# View Help
+ docker run -it -v $(pwd):/data wifidb/contour-generator pyramid --help
+
+# Example
  docker run -it -v $(pwd):/data wifidb/contour-generator \
     pyramid \
     --z 9 \
@@ -69,10 +74,14 @@ pyramid function (using Docker w/pmtiles https source):
 
 zoom function (using Docker w/pmtiles local source):
 ```
-#Downlad the test data into your local directory
-wget https://github.com/acalcutt/contour_generator/releases/download/test_data/JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles
+# View Help
+ docker run -it -v $(pwd):/data wifidb/contour-generator zoom --help
 
-docker run -it -v $(pwd):/data wifidb/contour-generator \
+# Downlad example test data into your local directory
+ wget https://github.com/acalcutt/contour_generator/releases/download/test_data/JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles
+
+# Example
+ docker run -it -v $(pwd):/data wifidb/contour-generator \
     zoom \
     --demUrl "pmtiles:///data/JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles" \
     --outputDir "/data/output_zoom" \
@@ -84,13 +93,17 @@ docker run -it -v $(pwd):/data wifidb/contour-generator \
     --processes 8 \
     -v
   
-# Test View Area #5/47.25/11.54
-# Note: some "No tile returned for" messages are normal with this JAXA dataset since there are areas without tiles
+  # Test View Area #5/47.25/11.54
+  # Note: some "No tile returned for" messages are normal with this JAXA dataset since there are areas without tiles
 ```
 
 bbox function (using Docker w/zxyPattern source):
 ```
-docker run -it -v $(pwd):/data wifidb/contour-generator \
+# View Help
+ docker run -it -v $(pwd):/data wifidb/contour-generator bbox --help
+
+# Example
+ docker run -it -v $(pwd):/data wifidb/contour-generator \
     bbox \
     --minx -73.51 \
     --miny 41.23 \
@@ -105,7 +118,7 @@ docker run -it -v $(pwd):/data wifidb/contour-generator \
     --outputDir "/data/output_bbox" \
     -v
 
-# Test View Area #5/44.96/-73.35
+  # Test View Area #5/44.96/-73.35
 ```
 
 Important Notes:
@@ -114,7 +127,6 @@ The -v ```$(pwd):/data``` part of the docker run command maps your local working
 
 # Install Locally on linux
 ```
-apt-get install bc #Required for bash math functions
 npm install
 ```
 
@@ -122,7 +134,11 @@ npm install
 
 pyramid function (Run Locally w/pmtiles https source):
 ```
-./generate_tiles.sh pyramid \
+# View Help
+ npm run generate-contours -- pyramid --help
+
+# Example
+ npm run generate-contours -- pyramid \
   --z 9 \
   --x 272 \
   --y 179 \
@@ -139,10 +155,14 @@ pyramid function (Run Locally w/pmtiles https source):
 
 zoom function (Run Locally w/pmtiles local source):
 ```
-#Downlad the test data into your local directory
-wget https://github.com/acalcutt/contour_generator/releases/download/test_data/JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles
+# View Help
+ npm run generate-contours -- zoom --help
 
-./generate_tiles.sh zoom \
+# Downlad the test data into your local directory
+ wget https://github.com/acalcutt/contour_generator/releases/download/test_data/JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles
+
+#Example
+ npm run generate-contours --  zoom \
   --demUrl "pmtiles://./JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles" \
   --outputDir "./output_zoom" \
   --sourceMaxZoom 7 \
@@ -159,7 +179,11 @@ wget https://github.com/acalcutt/contour_generator/releases/download/test_data/J
 
 bbox function (Run Locally w/zxyPattern source):
 ```
-./generate_tiles.sh bbox \
+# View Help
+ npm run generate-contours -- bbox --help
+
+# Example
+ npm run generate-contours -- bbox \
   --minx -73.51 \
   --miny 41.23 \
   --maxx -69.93 \
@@ -178,4 +202,4 @@ bbox function (Run Locally w/zxyPattern source):
 
 # Test Data License Information
 AWS mapzen terrarium tiles: https://registry.opendata.aws/terrain-tiles/
-JAXA AW3D30: https://earth.jaxa.jp/en/data/policy/ 
+JAXA AW3D30: https://earth.jaxa.jp/en/data/policy/
