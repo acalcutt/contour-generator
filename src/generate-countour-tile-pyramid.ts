@@ -1,6 +1,5 @@
 import { Command } from "commander";
 import { writeFileSync, mkdir, existsSync } from "fs";
-import sharp from "sharp";
 import { default as mlcontour } from "../node_modules/maplibre-contour/dist/index.mjs";
 import {
   extractZXYFromUrlTrim,
@@ -8,8 +7,7 @@ import {
   getOptionsForZoom,
   createBlankTileImage,
 } from "./mlcontour-adapter";
-// Import PMTiles adapter functions AND the tester
-import { getPMtilesTile, openPMtiles, pmtilesTester, getPMTilesMimeType } from "./pmtiles-adapter";
+import { getPMtilesTile, openPMtiles, pmtilesTester } from "./pmtiles-adapter";
 // Import MBTiles adapter functions, tester, AND the metadata structure from openMBTiles
 import { openMBTiles, getMBTilesTile, mbtilesTester } from "./mbtiles-adapter";
 
@@ -168,9 +166,7 @@ function getAllTiles(tile: Tile, outputMaxZoom: number): Tile[] {
 // --------------------------------------------------
 
 let pmtilesSource: PMTiles | undefined;
-let mbtilesSource: { handle: any; metadata?: { format?: string } } | undefined;
-// Store the result of openMBTiles which now includes handle and metadata
-let mbtilesSourceInfo: { handle: any; metadata?: { format?: string } } | undefined;
+let mbtilesSource: { handle: any; metadata?: { format?: string } } | undefined; // Store handle and metadata
 
 interface TileFetcherResult {
     data: Blob | undefined;
@@ -194,20 +190,16 @@ const pmtilesFetcher: TileFetcher = async (url: string, _abortController: AbortC
   }
 
   // Get tile data AND its MIME type from the PMTiles adapter.
-  // The mimeType is fetched from the header by getPMtilesTile.
   const { data: zxyTileData, mimeType: pmtilesMimeType } = await getPMtilesTile(pmtilesSource, $zxy.z, $zxy.x, $zxy.y);
 
   if (!zxyTileData) { // Tile not found
     console.warn(`DEM tile not found for ${url} (z:${$zxy.z}, x:${$zxy.x}, y:${$zxy.y}). Generating blank tile.`);
-
     // Determine the format for the blank tile:
     // 1. Use the MIME type obtained from PMTiles header (pmtilesMimeType).
-    // 2. If that's missing (e.g., header fetch failed or returned undefined),
-    //    then fall back to the command-line --blankTileFormat.
+    // 2. If that's missing, fall back to the command-line --blankTileFormat.
     const sourceMimeType = pmtilesMimeType || `image/${blankTileFormat}`;
-
     // Extract the format part (e.g., 'png' from 'image/png').
-    // If extraction fails (e.g., sourceMimeType was missing or invalid), fall back to the command-line format.
+    // If extraction fails, fall back to the command-line format.
     const formatForBlank = sourceMimeType.split('/')[1] || blankTileFormat;
 
     const blankTileBuffer = await createBlankTileImage(
@@ -217,7 +209,6 @@ const pmtilesFetcher: TileFetcher = async (url: string, _abortController: AbortC
       encoding as Encoding,
       formatForBlank as any
     );
-    // Return the blank tile with its determined MIME type
     return { data: new Blob([blankTileBuffer], { type: sourceMimeType }), mimeType: sourceMimeType, expires: undefined, cacheControl: undefined };
   }
 
@@ -290,14 +281,15 @@ const mbtilesFetcher: TileFetcher = async (url: string, abortController: AbortCo
 let currentFetcher: TileFetcher | undefined;
 let demUrlPattern: string | undefined;
 
-async function initializeSources() { // Wrap initialization in an async function
+// Wrap initialization in an async function to handle await
+async function initializeSources() {
   if (pmtilesTester.test(demUrl)) {
     const pmtilesPath = demUrl.replace(pmtilesTester, "");
     if (!existsSync(pmtilesPath)) {
       console.error(`PMTiles file not found at: ${pmtilesPath}`);
       process.exit(1);
     }
-    pmtilesSource = openPMtiles(pmtilesPath);
+    pmtilesSource = openPMtiles(pmtilesPath); // openPMtiles is synchronous
     currentFetcher = pmtilesFetcher;
     demUrlPattern = "/{z}/{x}/{y}";
   } else if (mbtilesTester.test(demUrl)) {
@@ -307,7 +299,7 @@ async function initializeSources() { // Wrap initialization in an async function
       process.exit(1);
     }
     // Await the result of openMBTiles because it's now asynchronous
-    mbtilesSource = await openMBTiles(mbtilesPath); // This now returns { handle, metadata }
+    mbtilesSource = await openMBTiles(mbtilesPath); // This returns { handle, metadata }
     currentFetcher = mbtilesFetcher;
     demUrlPattern = "/{z}/{x}/{y}";
   } else {
@@ -316,7 +308,7 @@ async function initializeSources() { // Wrap initialization in an async function
   }
 }
 
-// Call the initialization function before setting up the manager
+// Call the initialization function and wait for it to complete
 await initializeSources();
 
 const demManagerOptions = {
@@ -405,7 +397,6 @@ children.sort((a, b) => {
   //If Z and X are equal, sort by Y
   return a[1] - b[1];
 });
-
 
 if (!existsSync(outputDir)) {
   console.log(`Creating output directory: ${outputDir}`);
