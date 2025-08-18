@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { writeFileSync, mkdir, existsSync } from "fs";
+import sharp from "sharp";
 import { default as mlcontour } from "../node_modules/maplibre-contour/dist/index.mjs";
 import {
   extractZXYFromUrlTrim,
@@ -166,7 +167,8 @@ function getAllTiles(tile: Tile, outputMaxZoom: number): Tile[] {
 // --------------------------------------------------
 
 let pmtilesSource: PMTiles | undefined;
-let mbtilesSource: { handle: any; metadata?: { format?: string } } | undefined; // Store handle and metadata
+// mbtilesSource now correctly stores the result of openMBTiles
+let mbtilesSource: { handle: any; metadata?: { format?: string } } | undefined;
 
 interface TileFetcherResult {
     data: Blob | undefined;
@@ -189,17 +191,11 @@ const pmtilesFetcher: TileFetcher = async (url: string, _abortController: AbortC
     throw new Error(`Could not extract zxy from ${url}`);
   }
 
-  // Get tile data AND its MIME type from the PMTiles adapter.
   const { data: zxyTileData, mimeType: pmtilesMimeType } = await getPMtilesTile(pmtilesSource, $zxy.z, $zxy.x, $zxy.y);
 
-  if (!zxyTileData) { // Tile not found
+  if (!zxyTileData) {
     console.warn(`DEM tile not found for ${url} (z:${$zxy.z}, x:${$zxy.x}, y:${$zxy.y}). Generating blank tile.`);
-    // Determine the format for the blank tile:
-    // 1. Use the MIME type obtained from PMTiles header (pmtilesMimeType).
-    // 2. If that's missing, fall back to the command-line --blankTileFormat.
     const sourceMimeType = pmtilesMimeType || `image/${blankTileFormat}`;
-    // Extract the format part (e.g., 'png' from 'image/png').
-    // If extraction fails, fall back to the command-line format.
     const formatForBlank = sourceMimeType.split('/')[1] || blankTileFormat;
 
     const blankTileBuffer = await createBlankTileImage(
@@ -212,7 +208,6 @@ const pmtilesFetcher: TileFetcher = async (url: string, _abortController: AbortC
     return { data: new Blob([blankTileBuffer], { type: sourceMimeType }), mimeType: sourceMimeType, expires: undefined, cacheControl: undefined };
   }
 
-  // If tile data exists, use its MIME type. Fallback to PNG if it's missing.
   const mimeType = pmtilesMimeType || 'image/png';
   return { data: new Blob([zxyTileData], { type: mimeType }), mimeType: mimeType, expires: undefined, cacheControl: undefined };
 };
@@ -232,7 +227,6 @@ const mbtilesFetcher: TileFetcher = async (url: string, abortController: AbortCo
 
     if (!tileData || !tileData.data) {
       console.warn(`DEM tile not found for ${url} (z:${$zxy.z}, x:${$zxy.x}, y:${$zxy.y}). Generating blank tile.`);
-      // Determine the format from MBTiles metadata if available, otherwise use the fallback.
       const sourceFormat = mbtilesSource.metadata?.format || blankTileFormat;
 
       const blankTileBuffer = await createBlankTileImage(
@@ -255,7 +249,6 @@ const mbtilesFetcher: TileFetcher = async (url: string, abortController: AbortCo
   } catch (error: any) {
     if (error.message.includes("Tile does not exist") || error.message.includes("no such row")) {
         console.warn(`DEM tile not found for ${url} (z:${$zxy.z}, x:${$zxy.x}, y:${$zxy.y}). Generating blank tile.`);
-        // Determine the format from MBTiles metadata if available, otherwise use the fallback.
         const sourceFormat = mbtilesSource.metadata?.format || blankTileFormat;
 
         const blankTileBuffer = await createBlankTileImage(
@@ -281,7 +274,6 @@ const mbtilesFetcher: TileFetcher = async (url: string, abortController: AbortCo
 let currentFetcher: TileFetcher | undefined;
 let demUrlPattern: string | undefined;
 
-// Wrap initialization in an async function to handle await
 async function initializeSources() {
   if (pmtilesTester.test(demUrl)) {
     const pmtilesPath = demUrl.replace(pmtilesTester, "");
@@ -289,7 +281,7 @@ async function initializeSources() {
       console.error(`PMTiles file not found at: ${pmtilesPath}`);
       process.exit(1);
     }
-    pmtilesSource = openPMtiles(pmtilesPath); // openPMtiles is synchronous
+    pmtilesSource = openPMtiles(pmtilesPath);
     currentFetcher = pmtilesFetcher;
     demUrlPattern = "/{z}/{x}/{y}";
   } else if (mbtilesTester.test(demUrl)) {
@@ -390,11 +382,8 @@ async function processQueue(
 const children: Tile[] = getAllTiles([numX, numY, numZ], numoutputMaxZoom);
 
 children.sort((a, b) => {
-  //Sort by Z first
   if (a[2] !== b[2]) return a[2] - b[2];
-  //If Z is equal, sort by X
   if (a[0] !== b[0]) return a[0] - b[0];
-  //If Z and X are equal, sort by Y
   return a[1] - b[1];
 });
 
