@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { writeFileSync, mkdir, existsSync } from "fs";
+import sharp from "sharp";
 import { default as mlcontour } from "../node_modules/maplibre-contour/dist/index.mjs";
 import {
   extractZXYFromUrlTrim,
@@ -7,8 +8,8 @@ import {
   getOptionsForZoom,
   createBlankTileImage,
 } from "./mlcontour-adapter";
-// Import PMTiles adapter functions, tester, AND the new getPMTilesMimeType function
-import { getPMtilesTile, openPMtiles, pmtilesTester, getPMTilesMimeType } from "./pmtiles-adapter";
+import { getPMtilesTile, openPMtiles, pmtilesTester } from "./pmtiles-adapter";
+// Import MBTiles adapter functions, tester, AND the object structure from openMBTiles
 import { openMBTiles, getMBTilesTile, mbtilesTester } from "./mbtiles-adapter";
 
 import { getChildren } from "@mapbox/tilebelt";
@@ -63,19 +64,18 @@ program
   .option(
     "--blankTileNoDataValue <number>",
     "The elevation value to use for blank tiles when a DEM tile is missing.",
-    "0", // Default no-data value, adjust as needed
+    "-10000", // Default no-data value, adjust as needed
   )
   .option(
     "--blankTileSize <number>",
     "The pixel dimension of the tiles (e.g., 256 or 512).",
-    "512", // Default tile size
+    "256", // Default tile size
   )
   .option(
     "--blankTileFormat <string>",
     "The image format for generated blank tiles ('png', 'webp', or 'jpeg'). This is used as a fallback if the source format cannot be determined.",
     "png", // Default format for blank tiles
   )
-  // --------------------------------------------------
   .parse(process.argv);
 
 const options = program.opts();
@@ -167,7 +167,9 @@ function getAllTiles(tile: Tile, outputMaxZoom: number): Tile[] {
 // --------------------------------------------------
 
 let pmtilesSource: PMTiles | undefined;
-let mbtilesSource: { handle: any; metadata?: { format?: string } } | undefined;
+let mbtilesSource: any | undefined;
+// Store the result of openMBTiles which now includes handle and metadata (format)
+let mbtilesSourceInfo: { handle: any; metadata?: { format?: string } } | undefined;
 
 interface TileFetcherResult {
     data: Blob | undefined;
@@ -190,26 +192,22 @@ const pmtilesFetcher: TileFetcher = async (url: string, _abortController: AbortC
     throw new Error(`Could not extract zxy from ${url}`);
   }
 
-  let pmtilesMimeType: string | undefined;
-  try {
-    pmtilesMimeType = await getPMTilesMimeType(pmtilesSource);
-    if (!pmtilesMimeType) {
-        console.warn(`Could not determine PMTiles MIME type from header for ${url}. Falling back to command-line format.`);
-        pmtilesMimeType = `image/${blankTileFormat}`; // Fallback if header is unreadable
-    }
-  } catch (error) {
-    console.warn(`Error fetching PMTiles header for MIME type for ${url}. Falling back to command-line format.`, error);
-    pmtilesMimeType = `image/${blankTileFormat}`; // Fallback if fetching header itself fails
-  }
-
-  const { data: zxyTileData } = await getPMtilesTile(pmtilesSource, $zxy.z, $zxy.x, $zxy.y);
+  // Get tile data AND its MIME type from the PMTiles adapter
+  // The mimeType is fetched from the header by getPMtilesTile and returned.
+  const { data: zxyTileData, mimeType: pmtilesMimeType } = await getPMtilesTile(pmtilesSource, $zxy.z, $zxy.x, $zxy.y);
 
   if (!zxyTileData) { // Tile not found
     console.warn(`DEM tile not found for ${url} (z:${$zxy.z}, x:${$zxy.x}, y:${$zxy.y}). Generating blank tile.`);
 
-    // Use the previously determined sourceMimeType for the blank tile's format
-    const sourceMimeType = pmtilesMimeType; // This will be 'image/png', 'image/jpeg', etc. from the header or fallback
-    const formatForBlank = sourceMimeType.split('/')[1] || blankTileFormat; // Extract format like 'png'
+    // Determine the format for the blank tile:
+    // 1. Use the MIME type obtained from PMTiles header (pmtilesMimeType).
+    // 2. If that's missing (e.g., header fetch failed or returned undefined),
+    //    then fall back to the command-line --blankTileFormat.
+    const sourceMimeType = pmtilesMimeType || `image/${blankTileFormat}`;
+
+    // Extract the format part (e.g., 'png' from 'image/png').
+    // If extraction fails (e.g., sourceMimeType was missing or invalid), fall back to the command-line format.
+    const formatForBlank = sourceMimeType.split('/')[1] || blankTileFormat;
 
     const blankTileBuffer = await createBlankTileImage(
       numblankTileSize,
@@ -218,12 +216,12 @@ const pmtilesFetcher: TileFetcher = async (url: string, _abortController: AbortC
       encoding as Encoding,
       formatForBlank as any
     );
+    // Return the blank tile with its determined MIME type
     return { data: new Blob([blankTileBuffer], { type: sourceMimeType }), mimeType: sourceMimeType, expires: undefined, cacheControl: undefined };
   }
 
-  // If tile data exists, use the MIME type obtained from the PMTiles header.
-  // The mimeType from getPMtilesTile might be undefined if header fetch failed earlier.
-  const mimeType = pmtilesMimeType || 'image/png'; // Fallback to PNG if header MIME was unavailable
+  // If tile data exists, use its MIME type. Fallback to PNG if it's missing.
+  const mimeType = pmtilesMimeType || 'image/png';
   return { data: new Blob([zxyTileData], { type: mimeType }), mimeType: mimeType, expires: undefined, cacheControl: undefined };
 };
 
@@ -242,8 +240,7 @@ const mbtilesFetcher: TileFetcher = async (url: string, abortController: AbortCo
 
     if (!tileData || !tileData.data) {
       console.warn(`DEM tile not found for ${url} (z:${$zxy.z}, x:${$zxy.x}, y:${$zxy.y}). Generating blank tile.`);
-      
-      // Fix: Access metadata properly
+      // Determine the format from MBTiles metadata if available, otherwise use the fallback.
       const sourceFormat = mbtilesSource.metadata?.format || blankTileFormat;
 
       const blankTileBuffer = await createBlankTileImage(
@@ -266,9 +263,8 @@ const mbtilesFetcher: TileFetcher = async (url: string, abortController: AbortCo
   } catch (error: any) {
     if (error.message.includes("Tile does not exist") || error.message.includes("no such row")) {
         console.warn(`DEM tile not found for ${url} (z:${$zxy.z}, x:${$zxy.x}, y:${$zxy.y}). Generating blank tile.`);
-        
-        // Fix: Access metadata properly here too
-        const sourceFormat = mbtilesSource.metadata?.format || blankTileFormat;
+        // Determine the format from MBTiles metadata if available, otherwise use the fallback.
+        const sourceFormat = mbtilesSource?.format || blankTileFormat;
 
         const blankTileBuffer = await createBlankTileImage(
             numblankTileSize,
@@ -284,6 +280,8 @@ const mbtilesFetcher: TileFetcher = async (url: string, abortController: AbortCo
     }
   }
 };
+
+
 // --------------------------------------------------
 // DEM Manager Setup
 // --------------------------------------------------
@@ -306,7 +304,8 @@ if (pmtilesTester.test(demUrl)) {
     console.error(`MBTiles file not found at: ${mbtilesPath}`);
     process.exit(1);
   }
-  mbtilesSource = openMBTiles(mbtilesPath);
+  // Open MBTiles and capture its handle and format metadata
+  mbtilesSource = openMBTiles(mbtilesPath); // This returns { handle, metadata }
   currentFetcher = mbtilesFetcher;
   demUrlPattern = "/{z}/{x}/{y}";
 } else {
