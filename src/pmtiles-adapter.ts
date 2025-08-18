@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { PMTiles, FetchSource, type Source } from "pmtiles";
 import { existsSync } from "fs";
 
+const httpTester = /^https?:\/\//i;
 export const pmtilesTester = /^pmtiles:\/\//i;
 
 export class PMTilesFileSource implements Source {
@@ -38,14 +39,12 @@ function getPmtilesMimeTypeFromTypeNum(tileTypeNum: number): string {
 
 export function openPMtiles(FilePath: string): PMTiles {
   let pmtiles: PMTiles;
+
   try {
-    if (pmtilesTester.test(FilePath)) {
+    if (httpTester.test(FilePath)) {
       const source = new FetchSource(FilePath);
       pmtiles = new PMTiles(source);
     } else {
-      if (!existsSync(FilePath)) {
-        throw new Error(`PMTiles file not found at: ${FilePath}`);
-      }
       const fd = fs.openSync(FilePath, "r");
       const source = new PMTilesFileSource(fd);
       pmtiles = new PMTiles(source);
