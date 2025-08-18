@@ -6,14 +6,76 @@ import type {
   GlobalContourTileOptions,
 } from "../node_modules/maplibre-contour/dist/types";
 
+// Constants for Encoding
+const TERRARIUM_MULT = 256;
+const TERRARIUM_OFFSET = 32768;
+
+// Mapbox Encoding Parameters - Now hardcoded to match mlcontour's presumed defaults
+// If mlcontour uses these specific values internally for Mapbox encoding:
+const MAPBOX_INTERVAL_DEFAULT = 0.1;
+const MAPBOX_OFFSET_DEFAULT = -10000;
+
 /**
- * Processes image data from a blob.
- * @param {Blob} blob - The image data as a Blob.
- * @param {Encoding} encoding - The encoding to use when decoding.
- * @param {AbortController} abortController - An AbortController to cancel the image processing.
- * @returns {Promise<DemTile>} - A Promise that resolves with the processed image data, or throws if aborted.
- * @throws If an error occurs during image processing.
+ * Generates a blank DEM tile image buffer using sharp.
+ * @param width Tile width.
+ * @param height Tile height.
+ * @param elevationValue The elevation value to encode for the blank tile.
+ * @param encoding The DEM encoding ('mapbox' or 'terrarium').
+ * @param outputFormat The desired output image format ('png', 'webp', or 'jpeg').
+ * @returns Promise<Buffer> The image buffer.
  */
+export async function createBlankTileImage(
+  width: number,
+  height: number,
+  elevationValue: number,
+  encoding: Encoding,
+  outputFormat: 'png' | 'webp' | 'jpeg',
+): Promise<Buffer> {
+  const rgbData = new Uint8Array(width * height * 3); // 3 bytes per pixel (R, G, B)
+
+  let r = 0, g = 0, b = 0;
+
+  if (encoding === 'terrarium') {
+    const scaledValue = Math.round((elevationValue + TERRARIUM_OFFSET) * TERRARIUM_MULT);
+    const clampedValue = Math.max(0, Math.min(0xFFFFFF, scaledValue)); // Clamp for 24-bit color
+
+    r = (clampedValue >> 16) & 0xFF;
+    g = (clampedValue >> 8) & 0xFF;
+    b = clampedValue & 0xFF;
+
+  } else { // 'mapbox' encoding - using the hardcoded defaults
+    const rgbIntValue = Math.round((elevationValue + MAPBOX_OFFSET_DEFAULT) * (1 / MAPBOX_INTERVAL_DEFAULT));
+    const clampedRgbIntValue = Math.max(0, Math.min(0xFFFFFF, rgbIntValue)); // Clamp for 24-bit color
+
+    r = (clampedRgbIntValue >> 16) & 0xFF;
+    g = (clampedRgbIntValue >> 8) & 0xFF;
+    b = clampedRgbIntValue & 0xFF;
+  }
+
+  for (let i = 0; i < width * height; i++) {
+    rgbData[i * 3] = r;
+    rgbData[i * 3 + 1] = g;
+    rgbData[i * 3 + 2] = b;
+  }
+
+  const image = sharp(Buffer.from(rgbData), {
+      raw: {
+          width: width,
+          height: height,
+          channels: 3 // R, G, B
+      }
+  });
+
+  if (outputFormat === 'webp') {
+      return image.toFormat('webp', { lossless: true }).toBuffer();
+  } else {
+      // For PNG and JPEG, use the quality option where applicable
+      const quality = outputFormat === 'jpeg' ? 80 : undefined;
+      return image.toFormat(outputFormat, { quality }).toBuffer();
+  }
+}
+
+// GetImageData remains the same, as it decodes based on the encoding passed to it
 export async function GetImageData(
   blob: Blob,
   encoding: Encoding,
@@ -31,7 +93,7 @@ export async function GetImageData(
     }
 
     const { data, info } = await image
-      .ensureAlpha() // Ensure RGBA output
+      .ensureAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
 
@@ -41,7 +103,7 @@ export async function GetImageData(
     const parsed = mlcontour.decodeParsedImage(
       info.width,
       info.height,
-      encoding,
+      encoding, // This is the key: mlcontour decodes based on the encoding it receives
       data as any as Uint8ClampedArray,
     );
     if (abortController?.signal?.aborted) {
@@ -61,10 +123,9 @@ export async function GetImageData(
 export function extractZXYFromUrlTrim(
   url: string,
 ): { z: number; x: number; y: number } | null {
-  // 1. Find the index of the last `/`
   const lastSlashIndex = url.lastIndexOf("/");
   if (lastSlashIndex === -1) {
-    return null; // URL does not have any slashes
+    return null;
   }
 
   const segments = url.split("/");
@@ -80,19 +141,17 @@ export function extractZXYFromUrlTrim(
   const cleanedYSegment =
     lastDotIndex === -1 ? ySegment : ySegment.substring(0, lastDotIndex);
 
-  // 3. Attempt to parse segments as numbers
   const z = parseInt(zSegment, 10);
   const x = parseInt(xSegment, 10);
   const y = parseInt(cleanedYSegment, 10);
 
   if (isNaN(z) || isNaN(x) || isNaN(y)) {
-    return null; // Conversion failed, invalid URL format
+    return null;
   }
 
   return { z, x, y };
 }
 
-//This getOptionsForZoom function should be exported by mlcontour but I couldn't figure out how to access it so i put it here for now.
 export function getOptionsForZoom(
   options: GlobalContourTileOptions,
   zoom: number,

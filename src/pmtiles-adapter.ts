@@ -1,69 +1,70 @@
 import fs from "node:fs";
 import { PMTiles, FetchSource, type Source } from "pmtiles";
-const httpTester = /^https?:\/\//i;
+import { existsSync } from "fs";
+
+export const pmtilesTester = /^pmtiles:\/\//i;
 
 export class PMTilesFileSource implements Source {
   private fd: number;
-
-  constructor(fd: number) {
-    this.fd = fd;
-  }
-
-  getKey(): string {
-    return String(this.fd); // Convert the fd to a string
-  }
-
-  async getBytes(
-    offset: number,
-    length: number,
-  ): Promise<{ data: ArrayBuffer }> {
+  constructor(fd: number) { this.fd = fd; }
+  getKey(): string { return String(this.fd); }
+  async getBytes(offset: number, length: number): Promise<{ data: ArrayBuffer }> {
     const buffer = Buffer.alloc(length);
     await readFileBytes(this.fd, buffer, offset);
-    const ab = buffer.buffer.slice(
-      buffer.byteOffset,
-      buffer.byteOffset + buffer.byteLength,
-    );
-    return { data: ab };
+    return { data: buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) };
   }
 }
 
-async function readFileBytes(
-  fd: number,
-  buffer: Buffer,
-  offset: number,
-): Promise<void> {
+async function readFileBytes(fd: number, buffer: Buffer, offset: number): Promise<void> {
   return new Promise((resolve, reject) => {
     fs.read(fd, buffer, 0, buffer.length, offset, (err, bytesRead, _buff) => {
-      if (err) {
-        return reject(err);
-      }
-      if (bytesRead !== buffer.length) {
-        return reject(
-          new Error(
-            `Failed to read the requested amount of bytes, got ${bytesRead} expected ${buffer.length}`,
-          ),
-        );
-      }
+      if (err) return reject(err);
+      if (bytesRead !== buffer.length) return reject(new Error(`Failed to read ${buffer.length} bytes, got ${bytesRead}`));
       resolve();
     });
   });
 }
 
+function getPmtilesMimeTypeFromTypeNum(tileTypeNum: number): string {
+  switch (tileTypeNum) {
+    case 1: return 'application/x-protobuf'; // pbf
+    case 2: return 'image/png';
+    case 3: return 'image/jpeg';
+    case 4: return 'image/webp';
+    case 5: return 'image/avif';
+    default: return 'application/octet-stream';
+  }
+}
+
 export function openPMtiles(FilePath: string): PMTiles {
   let pmtiles: PMTiles;
-  let fd: number | undefined;
-
   try {
-    if (httpTester.test(FilePath)) {
+    if (pmtilesTester.test(FilePath)) {
       const source = new FetchSource(FilePath);
       pmtiles = new PMTiles(source);
     } else {
-      fd = fs.openSync(FilePath, "r");
+      if (!existsSync(FilePath)) {
+        throw new Error(`PMTiles file not found at: ${FilePath}`);
+      }
+      const fd = fs.openSync(FilePath, "r");
       const source = new PMTilesFileSource(fd);
       pmtiles = new PMTiles(source);
     }
     return pmtiles;
-  } finally {
+  } catch (error: any) {
+    console.error(`Failed to open PMTiles source ${FilePath}: ${error.message}`);
+    throw error;
+  }
+}
+
+// New exported function to get MIME type from PMTiles instance
+export async function getPMTilesMimeType(pmtiles: PMTiles): Promise<string | undefined> {
+  try {
+    const header = await pmtiles.getHeader();
+    return getPmtilesMimeTypeFromTypeNum(header.tileType);
+  } catch (error: any) {
+    console.error("Error getting PMTiles header for MIME type:", error.message);
+    return undefined;
   }
 }
 
@@ -72,17 +73,22 @@ export async function getPMtilesTile(
   z: number,
   x: number,
   y: number,
-): Promise<{ data: ArrayBuffer | undefined }> {
+): Promise<{ data: ArrayBuffer | undefined; mimeType: string | undefined }> {
   try {
+    // Fetch header and mimeType once for this operation
+    const header = await pmtiles.getHeader();
+    const mimeType = getPmtilesMimeTypeFromTypeNum(header.tileType);
+
     const zxyTile = await pmtiles.getZxy(z, x, y);
 
     if (zxyTile && zxyTile.data) {
-      return { data: zxyTile.data };
+      return { data: zxyTile.data, mimeType };
     } else {
-      return { data: undefined };
+      // Tile not found, but we still have the archive's mimeType from the header.
+      return { data: undefined, mimeType: mimeType };
     }
-  } catch (error) {
-    console.error("Error fetching tile:", error);
-    return { data: undefined };
+  } catch (error: any) {
+    console.error(`Error fetching PMTiles tile (z:${z}, x:${x}, y:${y}):`, error.message);
+    return { data: undefined, mimeType: undefined };
   }
 }
