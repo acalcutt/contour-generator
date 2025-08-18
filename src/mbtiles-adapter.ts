@@ -14,8 +14,8 @@ export async function openMBTiles(FilePath: string): Promise<{ handle: any; meta
   }
 
   return new Promise((resolve, reject) => {
-    // Use the constructor directly with a callback
-    new MBTiles(FilePath, { readOnly: true }, (err: any, mbtilesHandle: any) => {
+    // Use the constructor with just the file path and callback - no options object
+    new MBTiles(FilePath, (err: any, mbtilesHandle: any) => {
       if (err) {
         console.error(`Failed to open MBTiles file ${FilePath}: ${err.message}`);
         reject(err);
