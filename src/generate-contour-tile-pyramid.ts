@@ -17,7 +17,7 @@ const pmtilesTester = /^pmtiles:\/\//i;
 
 const program = new Command();
 program
-  .name("generate-countour-tile-pyramid")
+  .name("generate-contour-tile-pyramid")
   .description(
     "Generates a pyramid of contour tiles from a source DEM using the mlcontour library.",
   )
@@ -59,8 +59,17 @@ program
   .parse(process.argv);
 
 const options = program.opts();
-const { x, y, z, demUrl, encoding, sourceMaxZoom, increment, outputMaxZoom, outputDir } =
-  options;
+const {
+  x,
+  y,
+  z,
+  demUrl,
+  encoding,
+  sourceMaxZoom,
+  increment,
+  outputMaxZoom,
+  outputDir,
+} = options;
 const numX = Number(x);
 const numY = Number(y);
 const numZ = Number(z);
@@ -146,15 +155,15 @@ const contourOptions = {
     ? { levels: [numIncrement] }
     : {
         thresholds: {
-        1: [600, 3000],
-        4: [300, 1500],
-        8: [150, 750],
-        9: [80, 400],
-        10: [40, 200],
-        11: [20, 100],
-        12: [10, 50],
-        14: [5, 25],
-        16: [1, 5],
+          1: [600, 3000],
+          4: [300, 1500],
+          8: [150, 750],
+          9: [80, 400],
+          10: [40, 200],
+          11: [20, 100],
+          12: [10, 50],
+          14: [5, 25],
+          16: [1, 5],
         },
       }),
   contourLayer: "contours",
