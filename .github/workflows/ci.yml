@@ -49,7 +49,7 @@ jobs:
 
       - name: End to End Test pyramid
         run: |
-          docker run --rm contour-generator pyramid --z 9 --x 272 --y 179 --demUrl "pmtiles://https://acalcutt.github.io/contour_generator/test_data/terrain-tiles.pmtiles" --sourceMaxZoom 12  --encoding mapbox  --increment 0  --outputDir "./output_pyramid"  --outputMaxZoom 15  -v
+          docker run --rm contour-generator pyramid --z 9 --x 272 --y 179 --demUrl "pmtiles://https://acalcutt.github.io/contour-generator/test_data/terrain-tiles.pmtiles" --sourceMaxZoom 12  --encoding mapbox  --increment 0  --outputDir "./output_pyramid"  --outputMaxZoom 15  -v
 
       - name: End to End Test bbox
         run: |
@@ -57,7 +57,7 @@ jobs:
 
       - name: Download Test Data
         run: |
-          curl -L -o JAXA_2024_terrainrgb_z0-Z6_webp.pmtiles https://github.com/acalcutt/contour_generator/releases/download/test_data/JAXA_2024_terrainrgb_z0-Z6_webp.pmtiles
+          curl -L -o JAXA_2024_terrainrgb_z0-Z6_webp.pmtiles https://github.com/acalcutt/contour-generator/releases/download/test_data/JAXA_2024_terrainrgb_z0-Z6_webp.pmtiles
           if [[ $? -ne 0 ]]; then
              echo "Error downloading the test data!"
              exit 1
