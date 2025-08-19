@@ -1,9 +1,10 @@
 import { Command } from "commander";
-import { spawn } from "child_process";
+import { spawn, ChildProcessWithoutNullStreams } from "child_process"; // Import ChildProcess type if needed for clarity
 import path from "path";
-import { writeFileSync } from "fs";
+import { writeFileSync, existsSync, mkdirSync } from "fs";
 import { bboxToTiles } from "./bbox_to_tiles";
 
+// --- Types ---
 type BaseOptions = {
   demUrl: string;
   encoding: "mapbox" | "terrarium";
@@ -33,9 +34,10 @@ type BboxOptions = BaseOptions & {
   outputMinZoom: number;
 };
 
+// --- Helper Functions ---
+
 /**
  * Helper function to validate encoding
- * @param encoding - The encoding to validate
  */
 function validateEncoding(
   encoding: string,
@@ -49,15 +51,17 @@ function validateEncoding(
 
 /**
  * Function to create metadata.json
- * @param outputDir - The output directory
- * @param outputMinZoom - The minimum zoom level of the output
- * @param outputMaxZoom - The maximum zoom level of the output
  */
 async function createMetadata(
   outputDir: string,
   outputMinZoom: number,
   outputMaxZoom: number,
 ): Promise<void> {
+  // Ensure output directory exists
+  if (!existsSync(outputDir)) {
+    mkdirSync(outputDir, { recursive: true });
+  }
+
   const metadata = {
     name: `Contour_z${outputMinZoom}_Z${outputMaxZoom}`,
     type: "baselayer",
@@ -90,24 +94,22 @@ async function createMetadata(
 }
 
 /**
- * Function to process a single tile
- * @param options - The options for processing the tile
- * @returns
+ * Function to process a single tile by spawning a child process.
  */
 async function processTile(options: PyramidOptions): Promise<void> {
   if (options.verbose) {
     console.log(
-      `Processing tile - Zoom: ${options.z}, X: ${options.x}, Y: ${options.y}, outputMaxZoom: ${options.outputMaxZoom}`,
+      `[Tile ${options.z}-${options.x}-${options.y}] Starting... outputMaxZoom: ${options.outputMaxZoom}`,
     );
   }
 
   validateEncoding(options.encoding);
 
   return new Promise((resolve, reject) => {
-    const process = spawn("npm", [
+    const commandArgs = [
       "run",
       "generate-contour-tile-pyramid",
-      "--",
+      "--", // Separator for npm run arguments
       "--x",
       options.x.toString(),
       "--y",
@@ -126,65 +128,146 @@ async function processTile(options: PyramidOptions): Promise<void> {
       options.outputMaxZoom.toString(),
       "--outputDir",
       options.outputDir,
-    ]);
-    const processPrefix = `Process ${options.z}-${options.x}-${options.y}: `;
-    if (options.verbose) {
-      process.stdout.on("data", (data) => {
-        console.log(processPrefix + data.toString().trim());
-      });
-      process.stderr.on("data", (data) => {
-        console.log(processPrefix + data.toString().trim());
-      });
-    }
+    ];
 
-    process.on("close", (code) => {
+    // Spawn the child process
+    const workerProcess = spawn("npm", commandArgs, {
+      stdio: ['ignore', 'pipe', 'pipe'], // Capture stdout and stderr
+      shell: false, // Use false for better security and performance
+    });
+
+    const processPrefix = `[Tile ${options.z}-${options.x}-${options.y}] `;
+
+    // Buffering for verbose output to prevent flooding the console and consuming excessive memory
+    let stdoutBuffer = "";
+    let stderrBuffer = "";
+
+    workerProcess.stdout.on("data", (data) => {
+      stdoutBuffer += data.toString();
+      // Process buffered data line by line if verbose
+      if (options.verbose) {
+        const lines = stdoutBuffer.split('\n');
+        stdoutBuffer = lines.pop() || ''; // Keep the last (potentially partial) line
+        lines.forEach(line => console.log(processPrefix + line.trim()));
+      }
+    });
+
+    workerProcess.stderr.on("data", (data) => {
+      stderrBuffer += data.toString();
+      // Process buffered data line by line if verbose
+      if (options.verbose) {
+        const lines = stderrBuffer.split('\n');
+        stderrBuffer = lines.pop() || ''; // Keep the last (potentially partial) line
+        lines.forEach(line => console.error(processPrefix + line.trim())); // Use console.error for stderr
+      }
+    });
+
+    workerProcess.on("close", (code) => {
+      // Flush any remaining buffered data if verbose
+      if (options.verbose) {
+        if (stdoutBuffer) console.log(processPrefix + stdoutBuffer.trim());
+        if (stderrBuffer) console.error(processPrefix + stderrBuffer.trim());
+      }
+
       if (code === 0) {
         if (options.verbose) {
-          console.log(processPrefix + "Finished processing");
+          console.log(processPrefix + "Finished successfully.");
         }
         resolve();
       } else {
-        reject(new Error(processPrefix + `exited with code ${code}`));
+        // Reject with a more informative error, including stderr content
+        reject(new Error(`${processPrefix}Exited with code ${code}. Last stderr: "${stderrBuffer.trim()}"`));
       }
+    });
+
+    workerProcess.on("error", (err) => {
+      reject(new Error(`${processPrefix}Failed to start process: ${err.message}`));
     });
   });
 }
+
 /**
- * Function to process tiles in parallel
- * @param coordinates - The coordinates of the tiles to process
- * @param options - The options for processing the tiles
- * @param processes - The number of parallel processes to use
+ * Manages a pool of worker processes to execute tasks concurrently,
+ * ensuring no more than `maxProcesses` are running at any time.
+ * @param coordinates - Array of [z, x, y] tuples representing tiles to process.
+ * @param options - Base options to pass to each tile processing job.
+ * @param maxProcesses - The maximum number of parallel processes to run.
  */
 async function processTilesInParallel(
   coordinates: Array<[number, number, number]>,
   options: BaseOptions,
-  processes: number,
+  maxProcesses: number,
 ): Promise<void> {
-  const chunks = coordinates.reduce(
-    (acc, curr, i) => {
-      const chunkIndex = i % processes;
-      acc[chunkIndex] = acc[chunkIndex] || [];
-      acc[chunkIndex].push(curr);
-      return acc;
-    },
-    [] as Array<Array<[number, number, number]>>,
-  );
+  const totalTiles = coordinates.length;
+  if (totalTiles === 0) {
+    console.log("[Main] No tiles to process.");
+    return;
+  }
 
-  await Promise.all(
-    chunks.map((chunk) =>
-      Promise.all(
-        chunk.map(([z, x, y]) =>
-          processTile({
-            ...options,
-            x,
-            y,
-            z,
-          }),
-        ),
-      ),
-    ),
-  );
+  let currentIndex = 0;
+  let completedCount = 0;
+  const activeWorkers: Promise<void>[] = [];
+
+  console.log(`[Main] Starting to process ${totalTiles} tiles with up to ${maxProcesses} parallel processes.`);
+
+  return new Promise((resolve, reject) => {
+    const scheduleNextTile = () => {
+      // If all tasks are assigned and all active workers have finished, we are done.
+      if (currentIndex >= totalTiles && activeWorkers.length === 0) {
+        console.log(`[Main] All ${totalTiles} tiles processed.`);
+        return resolve();
+      }
+
+      // While we have tasks left and the number of active workers is below the limit
+      while (currentIndex < totalTiles && activeWorkers.length < maxProcesses) {
+        const [z, x, y] = coordinates[currentIndex];
+        const tileOptions: PyramidOptions = {
+          ...options,
+          z,
+          x,
+          y,
+        };
+
+        currentIndex++; // Move to the next task
+
+        if (options.verbose) {
+          console.log(`[Main] Assigning tile ${z}-${x}-${y} to worker. (${currentIndex}/${totalTiles} assigned)`);
+        }
+
+        // Create a promise for this tile's processing
+        const tilePromise = processTile(tileOptions)
+          .then(() => {
+            completedCount++;
+            if (options.verbose) {
+              console.log(`[Main] Tile ${z}-${x}-${y} completed. (${completedCount}/${totalTiles} done)`);
+            }
+          })
+          .catch((error) => {
+            console.error(`[Main] Error processing tile ${z}-${x}-${y}:`, error);
+            // Decide if you want to stop all on first error or continue
+            // For now, we'll reject the main promise to signal an issue
+            reject(error); // Reject the main promise if any tile fails
+          })
+          .finally(() => {
+            // Remove this worker from the active pool
+            const index = activeWorkers.indexOf(tilePromise);
+            if (index > -1) {
+              activeWorkers.splice(index, 1);
+            }
+            // Try to schedule the next available tile
+            scheduleNextTile();
+          });
+
+        activeWorkers.push(tilePromise);
+      }
+    };
+
+    // Start the initial batch of workers
+    scheduleNextTile();
+  });
 }
+
+// --- Command Handlers ---
 
 async function runPyramid(options: Required<PyramidOptions>): Promise<void> {
   await processTile(options);
@@ -193,11 +276,10 @@ async function runPyramid(options: Required<PyramidOptions>): Promise<void> {
 
 async function runZoom(options: ZoomOptions): Promise<void> {
   if (options.verbose) {
-    console.log("Source File:", options.demUrl);
-    console.log("Output Directory:", options.outputDir);
-    console.log("Output Min Zoom:", options.outputMinZoom);
-    console.log("Output Max Zoom:", options.outputMaxZoom);
-    console.log("Main: [START] Processing tiles.");
+    console.log(`[Main] Source: ${options.demUrl}`);
+    console.log(`[Main] Output Dir: ${options.outputDir}`);
+    console.log(`[Main] Zoom Levels: ${options.outputMinZoom} to ${options.outputMaxZoom}`);
+    console.log(`[Main] Starting tile generation.`);
   }
 
   const coordinates: Array<[number, number, number]> = [];
@@ -211,9 +293,7 @@ async function runZoom(options: ZoomOptions): Promise<void> {
   await processTilesInParallel(coordinates, options, options.processes);
 
   if (options.verbose) {
-    console.log(
-      `Main: [END] Finished processing all tiles at zoom level ${options.outputMinZoom}.`,
-    );
+    console.log(`[Main] Finished processing all tiles at zoom level ${options.outputMinZoom}.`);
   }
 
   await createMetadata(
@@ -233,19 +313,16 @@ async function runBbox(options: BboxOptions): Promise<void> {
   );
 
   if (options.verbose) {
-    console.log("Source File:", options.demUrl);
-    console.log("Output Directory:", options.outputDir);
-    console.log(
-      "Bounding Box:",
-      `${options.minx},${options.miny},${options.maxx},${options.maxy}`,
-    );
-    console.log("Main: [START] Processing tiles.");
+    console.log(`[Main] Source: ${options.demUrl}`);
+    console.log(`[Main] Output Dir: ${options.outputDir}`);
+    console.log(`[Main] Bounding Box: ${options.minx},${options.miny},${options.maxx},${options.maxy}`);
+    console.log(`[Main] Starting tile generation.`);
   }
 
   await processTilesInParallel(coordinates, options, options.processes);
 
   if (options.verbose) {
-    console.log("Main: [END] Finished processing all tiles in bounding box.");
+    console.log("Main: Finished processing all tiles in bounding box.");
   }
 
   await createMetadata(
@@ -255,6 +332,7 @@ async function runBbox(options: BboxOptions): Promise<void> {
   );
 }
 
+// --- Main Program Setup ---
 async function main(): Promise<void> {
   const program = new Command();
 
@@ -265,7 +343,7 @@ async function main(): Promise<void> {
   // --- Define common option configurations ---
   const commonOptionConfigs = [
     {
-      type: 'required', // Type of method to use (requiredOption or option)
+      type: 'required',
       args: ['--demUrl <string>', 'The URL of the DEM source.'],
     },
     {
@@ -317,7 +395,6 @@ async function main(): Promise<void> {
       "The Z coordinate of the parent tile.",
       Number,
     );
-    // Apply common options to pyramidCmd
 
   // --- Zoom Command ---
   const zoomCmd = program
@@ -329,9 +406,8 @@ async function main(): Promise<void> {
       "--outputMinZoom <number>",
       "The minimum zoom level of the output tile pyramid.",
       Number,
-      5, // Default value
+      5,
     );
-    // Apply common options to zoomCmd
 
   // --- Bbox Command ---
   const bboxCmd = program
@@ -363,18 +439,15 @@ async function main(): Promise<void> {
       "--outputMinZoom <number>",
       "The minimum zoom level of the output tile pyramid.",
       Number,
-      5, // Default value
+      5,
     );
-    // Apply common options to bboxCmd
 
-
-  // Helper function to apply options
+  // Helper function to apply options to commands
   const applyCommonOptions = (command: Command.Command, configs: typeof commonOptionConfigs) => {
     for (const config of configs) {
       const { type, args } = config;
-      // Spread the arguments onto the appropriate commander method
       if (type === 'required') {
-        command.requiredOption(...args as any); // Using 'any' here because TS struggles with spread for methods with varying arg counts for option/requiredOption
+        command.requiredOption(...args as any);
       } else {
         command.option(...args as any);
       }
@@ -385,7 +458,6 @@ async function main(): Promise<void> {
   applyCommonOptions(pyramidCmd, commonOptionConfigs);
   applyCommonOptions(zoomCmd, commonOptionConfigs);
   applyCommonOptions(bboxCmd, commonOptionConfigs);
-
 
   // --- Set up action handlers (after options are defined) ---
   pyramidCmd.action(async (options: PyramidOptions) => {
@@ -399,7 +471,6 @@ async function main(): Promise<void> {
   bboxCmd.action(async (options: BboxOptions) => {
     await runBbox(options);
   });
-
 
   await program.parseAsync(process.argv);
 }
