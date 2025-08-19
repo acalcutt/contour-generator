@@ -186,15 +186,15 @@ const pmtilesFetcher: TileFetcher = async (url: string, _abortController: AbortC
     throw new Error("PMTiles not initialized.");
   }
 
-  const $zxy = extractZXYFromUrlTrim(url);
-  if (!$zxy) {
+  const zxy = extractZXYFromUrlTrim(url);
+  if (!zxy) {
     throw new Error(`Could not extract zxy from ${url}`);
   }
 
-  const { data: zxyTileData, mimeType: pmtilesMimeType } = await getPMtilesTile(pmtilesSource, $zxy.z, $zxy.x, $zxy.y);
+  const { data: zxyTileData, mimeType: pmtilesMimeType } = await getPMtilesTile(pmtilesSource, zxy.z, zxy.x, zxy.y);
 
   if (!zxyTileData) {
-    console.warn(`DEM tile not found for ${url} (z:${$zxy.z}, x:${$zxy.x}, y:${$zxy.y}). Generating blank tile.`);
+    console.warn(`DEM tile not found for ${url} (z:${zxy.z}, x:${zxy.x}, y:${zxy.y}). Generating blank tile.`);
     const sourceMimeType = pmtilesMimeType || `image/${blankTileFormat}`;
     const formatForBlank = sourceMimeType.split('/')[1] || blankTileFormat;
 
@@ -217,16 +217,16 @@ const mbtilesFetcher: TileFetcher = async (url: string, abortController: AbortCo
     throw new Error("MBTiles not initialized.");
   }
 
-  const $zxy = extractZXYFromUrlTrim(url);
-  if (!$zxy) {
+  const zxy = extractZXYFromUrlTrim(url);
+  if (!zxy) {
     throw new Error(`Could not extract zxy from ${url}`);
   }
 
   try {
-    const tileData = await getMBTilesTile(mbtilesSource.handle, $zxy.z, $zxy.x, $zxy.y);
+    const tileData = await getMBTilesTile(mbtilesSource.handle, zxy.z, zxy.x, zxy.y);
 
     if (!tileData || !tileData.data) {
-      console.warn(`DEM tile not found for ${url} (z:${$zxy.z}, x:${$zxy.x}, y:${$zxy.y}). Generating blank tile.`);
+      console.warn(`DEM tile not found for ${url} (z:${zxy.z}, x:${zxy.x}, y:${zxy.y}). Generating blank tile.`);
       const sourceFormat = mbtilesSource.metadata?.format || blankTileFormat;
 
       const blankTileBuffer = await createBlankTileImage(
@@ -248,7 +248,7 @@ const mbtilesFetcher: TileFetcher = async (url: string, abortController: AbortCo
 
   } catch (error: any) {
     if (error.message.includes("Tile does not exist") || error.message.includes("no such row")) {
-        console.warn(`DEM tile not found for ${url} (z:${$zxy.z}, x:${$zxy.x}, y:${$zxy.y}). Generating blank tile.`);
+        console.warn(`DEM tile not found for ${url} (z:${zxy.z}, x:${zxy.x}, y:${zxy.y}). Generating blank tile.`);
         const sourceFormat = mbtilesSource.metadata?.format || blankTileFormat;
 
         const blankTileBuffer = await createBlankTileImage(
