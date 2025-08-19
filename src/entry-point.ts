@@ -262,7 +262,44 @@ async function main(): Promise<void> {
     .name("contour-generator")
     .description("Generates contours from DEM tiles.");
 
-  program
+  // --- Define common option configurations ---
+  const commonOptionConfigs = [
+    {
+      type: 'required', // Type of method to use (requiredOption or option)
+      args: ['--demUrl <string>', 'The URL of the DEM source.'],
+    },
+    {
+      type: 'option',
+      args: ['--encoding <string>', 'The encoding of the source DEM (e.g., "terrarium", "mapbox").', 'mapbox'],
+    },
+    {
+      type: 'option',
+      args: ['--sourceMaxZoom <number>', 'The maximum zoom level of the source DEM.', Number, 8],
+    },
+    {
+      type: 'option',
+      args: ['--increment <number>', 'The contour increment value to extract.', Number, 0],
+    },
+    {
+      type: 'option',
+      args: ['--outputMaxZoom <number>', 'The maximum zoom level of the output tile pyramid.', Number, 8],
+    },
+    {
+      type: 'option',
+      args: ['--outputDir <string>', 'The output directory where tiles will be stored.', './output'],
+    },
+    {
+      type: 'option',
+      args: ['--processes <number>', 'The number of parallel processes to use.', Number, 8],
+    },
+    {
+      type: 'option',
+      args: ['-v, --verbose', 'Enable verbose output', false],
+    },
+  ];
+
+  // --- Pyramid Command ---
+  const pyramidCmd = program
     .command("pyramid")
     .description("Generates contours for a specific tile and its children.")
     .requiredOption(
@@ -279,12 +316,11 @@ async function main(): Promise<void> {
       "--z <number>",
       "The Z coordinate of the parent tile.",
       Number,
-    )
-    .action(async (options: PyramidOptions) => {
-      await runPyramid(options);
-    });
+    );
+    // Apply common options to pyramidCmd
 
-  program
+  // --- Zoom Command ---
+  const zoomCmd = program
     .command("zoom")
     .description(
       "Generates a list of parent tiles at a specified zoom level and runs pyramid on each. This command assumes you have the entire world at the specified zoom levels.",
@@ -293,13 +329,12 @@ async function main(): Promise<void> {
       "--outputMinZoom <number>",
       "The minimum zoom level of the output tile pyramid.",
       Number,
-      5,
-    )
-    .action(async (options: ZoomOptions) => {
-      await runZoom(options);
-    });
+      5, // Default value
+    );
+    // Apply common options to zoomCmd
 
-  program
+  // --- Bbox Command ---
+  const bboxCmd = program
     .command("bbox")
     .description(
       "Generates a list of parent tiles covering a bounding box and runs pyramid on each.",
@@ -328,54 +363,48 @@ async function main(): Promise<void> {
       "--outputMinZoom <number>",
       "The minimum zoom level of the output tile pyramid.",
       Number,
-      5,
-    )
-    .action(async (options: BboxOptions) => {
-      await runBbox(options);
-    });
+      5, // Default value
+    );
+    // Apply common options to bboxCmd
 
-  // Add common options to all commands
-  for (const command of program.commands) {
-    command
-      .requiredOption("--demUrl <string>", "The URL of the DEM source.")
-      .option(
-        "--encoding <string>",
-        'The encoding of the source DEM (e.g., "terrarium", "mapbox").',
-        "mapbox",
-      )
-      .option(
-        "--sourceMaxZoom <number>",
-        "The maximum zoom level of the source DEM.",
-        Number,
-        8,
-      )
-      .option(
-        "--increment <number>",
-        "The contour increment value to extract.",
-        Number,
-        0,
-      )
-      .option(
-        "--outputMaxZoom <number>",
-        "The maximum zoom level of the output tile pyramid.",
-        Number,
-        8,
-      )
-      .option(
-        "--outputDir <string>",
-        "The output directory where tiles will be stored.",
-        "./output",
-      )
-      .option(
-        "--processes <number>",
-        "The number of parallel processes to use.",
-        Number,
-        8,
-      )
-      .option("-v, --verbose", "Enable verbose output", false);
-  }
+
+  // Helper function to apply options
+  const applyCommonOptions = (command: Command.Command, configs: typeof commonOptionConfigs) => {
+    for (const config of configs) {
+      const { type, args } = config;
+      // Spread the arguments onto the appropriate commander method
+      if (type === 'required') {
+        command.requiredOption(...args as any); // Using 'any' here because TS struggles with spread for methods with varying arg counts for option/requiredOption
+      } else {
+        command.option(...args as any);
+      }
+    }
+  };
+
+  // Apply common options to each command
+  applyCommonOptions(pyramidCmd, commonOptionConfigs);
+  applyCommonOptions(zoomCmd, commonOptionConfigs);
+  applyCommonOptions(bboxCmd, commonOptionConfigs);
+
+
+  // --- Set up action handlers (after options are defined) ---
+  pyramidCmd.action(async (options: PyramidOptions) => {
+    await runPyramid(options);
+  });
+
+  zoomCmd.action(async (options: ZoomOptions) => {
+    await runZoom(options);
+  });
+
+  bboxCmd.action(async (options: BboxOptions) => {
+    await runBbox(options);
+  });
+
 
   await program.parseAsync(process.argv);
 }
 
-main();
+main().catch((err) => {
+  console.error("An unhandled error occurred:", err);
+  process.exit(1);
+});
