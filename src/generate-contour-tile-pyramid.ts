@@ -64,12 +64,12 @@ program
   .option(
     "--blankTileNoDataValue <number>",
     "The elevation value to use for blank tiles when a DEM tile is missing.",
-    "-10000", // Default no-data value, adjust as needed
+    "0", // Default no-data value, adjust as needed
   )
   .option(
     "--blankTileSize <number>",
     "The pixel dimension of the tiles (e.g., 256 or 512).",
-    "256", // Default tile size
+    "512", // Default tile size
   )
   .option(
     "--blankTileFormat <string>",
