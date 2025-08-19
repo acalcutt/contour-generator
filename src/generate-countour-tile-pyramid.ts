@@ -277,10 +277,6 @@ let demUrlPattern: string | undefined;
 async function initializeSources() {
   if (pmtilesTester.test(demUrl)) {
     const pmtilesPath = demUrl.replace(pmtilesTester, "");
-    if (!existsSync(pmtilesPath)) {
-      console.error(`PMTiles file not found at: ${pmtilesPath}`);
-      process.exit(1);
-    }
     pmtilesSource = openPMtiles(pmtilesPath);
     currentFetcher = pmtilesFetcher;
     demUrlPattern = "/{z}/{x}/{y}";
