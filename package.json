@@ -1,6 +1,6 @@
 {
   "name": "contour_generator",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Locally generates contour vector tiles using maplibre-contour",
   "main": "src/entry-point.ts",
   "scripts": {
@@ -29,6 +29,7 @@
   },
   "homepage": "https://github.com/acalcutt/contour_generator#readme",
   "dependencies": {
+    "@mapbox/mbtiles": "^0.12.1",
     "@mapbox/tilebelt": "^2.0.2",
     "commander": "^12.1.0",
     "maplibre-contour": "^0.1.0",

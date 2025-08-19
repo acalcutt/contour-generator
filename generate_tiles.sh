@@ -282,7 +282,7 @@ run_function_pyramid() {
 		echo "process_tile: [START] Processing tile - Zoom: ${z}, X: ${x}, Y: ${y}, outputMaxZoom: ${outputMaxZoom}"
 	fi
 
-	npx tsx ./src/generate-coutour-tile-pyramid.ts --x "${x}" --y "${y}" --z "${z}" --demUrl "${demUrl}" --encoding "${encoding}" --sourceMaxZoom "${sourceMaxZoom}" --increment "${increment}" --outputMaxZoom "${outputMaxZoom}" --outputDir "${outputDir}"
+	npx tsx ./src/generate-contour-tile-pyramid.ts --x "${x}" --y "${y}" --z "${z}" --demUrl "${demUrl}" --encoding "${encoding}" --sourceMaxZoom "${sourceMaxZoom}" --increment "${increment}" --outputMaxZoom "${outputMaxZoom}" --outputDir "${outputDir}"
 
 	if [[ "${verbose}" = "true" ]]; then
 		echo "process_tile: [END] Finished processing ${z}-${x}-${y}"
