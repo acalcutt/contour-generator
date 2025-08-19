@@ -142,8 +142,8 @@ async function processTile(options: PyramidOptions): Promise<void> {
 
     // Spawn the child process
     const workerProcess = spawn("npm", commandArgs, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'], // Capture stdout and stderr
+      shell: false, // Use false for better security and performance
     });
 
     const processPrefix = `[Tile ${options.z}-${options.x}-${options.y}] `;
