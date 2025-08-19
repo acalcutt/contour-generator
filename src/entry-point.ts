@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { spawn, ChildProcessWithoutNullStreams } from "child_process"; // Import ChildProcess type if needed for clarity
+import { spawn, ChildProcessWithoutNullStreams } from "child_process";
 import path from "path";
 import { writeFileSync, existsSync, mkdirSync } from "fs";
 import { bboxToTiles } from "./bbox_to_tiles";
@@ -14,6 +14,9 @@ type BaseOptions = {
   outputDir: string;
   processes: number;
   verbose: boolean;
+  blankTileNoDataValue: number;
+  blankTileSize: number;
+  blankTileFormat: string;
 };
 
 type PyramidOptions = BaseOptions & {
@@ -33,6 +36,7 @@ type BboxOptions = BaseOptions & {
   maxy: number;
   outputMinZoom: number;
 };
+
 
 // --- Helper Functions ---
 
@@ -128,12 +132,18 @@ async function processTile(options: PyramidOptions): Promise<void> {
       options.outputMaxZoom.toString(),
       "--outputDir",
       options.outputDir,
+      "--blankTileNoDataValue",
+      options.blankTileNoDataValue.toString(),
+      "--blankTileSize",
+      options.blankTileSize.toString(),
+      "--blankTileFormat",
+      options.blankTileFormat,
     ];
 
     // Spawn the child process
     const workerProcess = spawn("npm", commandArgs, {
-      stdio: ['ignore', 'pipe', 'pipe'], // Capture stdout and stderr
-      shell: false, // Use false for better security and performance
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: false,
     });
 
     const processPrefix = `[Tile ${options.z}-${options.x}-${options.y}] `;
@@ -147,7 +157,7 @@ async function processTile(options: PyramidOptions): Promise<void> {
       // Process buffered data line by line if verbose
       if (options.verbose) {
         const lines = stdoutBuffer.split('\n');
-        stdoutBuffer = lines.pop() || ''; // Keep the last (potentially partial) line
+        stdoutBuffer = lines.pop() || '';
         lines.forEach(line => console.log(processPrefix + line.trim()));
       }
     });
@@ -157,8 +167,8 @@ async function processTile(options: PyramidOptions): Promise<void> {
       // Process buffered data line by line if verbose
       if (options.verbose) {
         const lines = stderrBuffer.split('\n');
-        stderrBuffer = lines.pop() || ''; // Keep the last (potentially partial) line
-        lines.forEach(line => console.error(processPrefix + line.trim())); // Use console.error for stderr
+        stderrBuffer = lines.pop() || '';
+        lines.forEach(line => console.error(processPrefix + line.trim()));
       }
     });
 
@@ -228,7 +238,7 @@ async function processTilesInParallel(
           y,
         };
 
-        currentIndex++; // Move to the next task
+        currentIndex++;
 
         if (options.verbose) {
           console.log(`[Main] Assigning tile ${z}-${x}-${y} to worker. (${currentIndex}/${totalTiles} assigned)`);
@@ -244,9 +254,7 @@ async function processTilesInParallel(
           })
           .catch((error) => {
             console.error(`[Main] Error processing tile ${z}-${x}-${y}:`, error);
-            // Decide if you want to stop all on first error or continue
-            // For now, we'll reject the main promise to signal an issue
-            reject(error); // Reject the main promise if any tile fails
+            reject(error);
           })
           .finally(() => {
             // Remove this worker from the active pool
@@ -370,6 +378,20 @@ async function main(): Promise<void> {
       type: 'option',
       args: ['--processes <number>', 'The number of parallel processes to use.', Number, 8],
     },
+    // --- Blank Tile Options ---
+    {
+      type: 'option',
+      args: ['--blankTileNoDataValue <number>', 'The elevation value to use for blank tiles when a DEM tile is missing.', Number, 0],
+    },
+    {
+      type: 'option',
+      args: ['--blankTileSize <number>', 'The pixel dimension of the tiles (e.g., 256 or 512).', Number, 512],
+    },
+    {
+      type: 'option',
+      args: ['--blankTileFormat <string>', 'The image format for generated blank tiles (\'png\', \'webp\', or \'jpeg\').', 'png'],
+    },
+    // --- Verbose Option ---
     {
       type: 'option',
       args: ['-v, --verbose', 'Enable verbose output', false],
