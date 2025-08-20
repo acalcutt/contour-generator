@@ -37,7 +37,6 @@ type BboxOptions = BaseOptions & {
   outputMinZoom: number;
 };
 
-
 // --- Helper Functions ---
 
 /**
@@ -142,7 +141,7 @@ async function processTile(options: PyramidOptions): Promise<void> {
 
     // Spawn the child process
     const workerProcess = spawn("npm", commandArgs, {
-      stdio: ['ignore', 'pipe', 'pipe'], // Capture stdout and stderr
+      stdio: ["ignore", "pipe", "pipe"], // Capture stdout and stderr
       shell: false, // Use false for better security and performance
     });
 
@@ -156,9 +155,9 @@ async function processTile(options: PyramidOptions): Promise<void> {
       stdoutBuffer += data.toString();
       // Process buffered data line by line if verbose
       if (options.verbose) {
-        const lines = stdoutBuffer.split('\n');
-        stdoutBuffer = lines.pop() || '';
-        lines.forEach(line => console.log(processPrefix + line.trim()));
+        const lines = stdoutBuffer.split("\n");
+        stdoutBuffer = lines.pop() || "";
+        lines.forEach((line) => console.log(processPrefix + line.trim()));
       }
     });
 
@@ -166,9 +165,9 @@ async function processTile(options: PyramidOptions): Promise<void> {
       stderrBuffer += data.toString();
       // Process buffered data line by line if verbose
       if (options.verbose) {
-        const lines = stderrBuffer.split('\n');
-        stderrBuffer = lines.pop() || '';
-        lines.forEach(line => console.error(processPrefix + line.trim()));
+        const lines = stderrBuffer.split("\n");
+        stderrBuffer = lines.pop() || "";
+        lines.forEach((line) => console.error(processPrefix + line.trim()));
       }
     });
 
@@ -186,12 +185,18 @@ async function processTile(options: PyramidOptions): Promise<void> {
         resolve();
       } else {
         // Reject with a more informative error, including stderr content
-        reject(new Error(`${processPrefix}Exited with code ${code}. Last stderr: "${stderrBuffer.trim()}"`));
+        reject(
+          new Error(
+            `${processPrefix}Exited with code ${code}. Last stderr: "${stderrBuffer.trim()}"`,
+          ),
+        );
       }
     });
 
     workerProcess.on("error", (err) => {
-      reject(new Error(`${processPrefix}Failed to start process: ${err.message}`));
+      reject(
+        new Error(`${processPrefix}Failed to start process: ${err.message}`),
+      );
     });
   });
 }
@@ -218,7 +223,9 @@ async function processTilesInParallel(
   let completedCount = 0;
   const activeWorkers: Promise<void>[] = [];
 
-  console.log(`[Main] Starting to process ${totalTiles} tiles with up to ${maxProcesses} parallel processes.`);
+  console.log(
+    `[Main] Starting to process ${totalTiles} tiles with up to ${maxProcesses} parallel processes.`,
+  );
 
   return new Promise((resolve, reject) => {
     const scheduleNextTile = () => {
@@ -241,7 +248,9 @@ async function processTilesInParallel(
         currentIndex++;
 
         if (options.verbose) {
-          console.log(`[Main] Assigning tile ${z}-${x}-${y} to worker. (${currentIndex}/${totalTiles} assigned)`);
+          console.log(
+            `[Main] Assigning tile ${z}-${x}-${y} to worker. (${currentIndex}/${totalTiles} assigned)`,
+          );
         }
 
         // Create a promise for this tile's processing
@@ -249,11 +258,16 @@ async function processTilesInParallel(
           .then(() => {
             completedCount++;
             if (options.verbose) {
-              console.log(`[Main] Tile ${z}-${x}-${y} completed. (${completedCount}/${totalTiles} done)`);
+              console.log(
+                `[Main] Tile ${z}-${x}-${y} completed. (${completedCount}/${totalTiles} done)`,
+              );
             }
           })
           .catch((error) => {
-            console.error(`[Main] Error processing tile ${z}-${x}-${y}:`, error);
+            console.error(
+              `[Main] Error processing tile ${z}-${x}-${y}:`,
+              error,
+            );
             reject(error);
           })
           .finally(() => {
@@ -286,7 +300,9 @@ async function runZoom(options: ZoomOptions): Promise<void> {
   if (options.verbose) {
     console.log(`[Main] Source: ${options.demUrl}`);
     console.log(`[Main] Output Dir: ${options.outputDir}`);
-    console.log(`[Main] Zoom Levels: ${options.outputMinZoom} to ${options.outputMaxZoom}`);
+    console.log(
+      `[Main] Zoom Levels: ${options.outputMinZoom} to ${options.outputMaxZoom}`,
+    );
     console.log(`[Main] Starting tile generation.`);
   }
 
@@ -301,7 +317,9 @@ async function runZoom(options: ZoomOptions): Promise<void> {
   await processTilesInParallel(coordinates, options, options.processes);
 
   if (options.verbose) {
-    console.log(`[Main] Finished processing all tiles at zoom level ${options.outputMinZoom}.`);
+    console.log(
+      `[Main] Finished processing all tiles at zoom level ${options.outputMinZoom}.`,
+    );
   }
 
   await createMetadata(
@@ -323,7 +341,9 @@ async function runBbox(options: BboxOptions): Promise<void> {
   if (options.verbose) {
     console.log(`[Main] Source: ${options.demUrl}`);
     console.log(`[Main] Output Dir: ${options.outputDir}`);
-    console.log(`[Main] Bounding Box: ${options.minx},${options.miny},${options.maxx},${options.maxy}`);
+    console.log(
+      `[Main] Bounding Box: ${options.minx},${options.miny},${options.maxx},${options.maxy}`,
+    );
     console.log(`[Main] Starting tile generation.`);
   }
 
@@ -351,50 +371,92 @@ async function main(): Promise<void> {
   // --- Define common option configurations ---
   const commonOptionConfigs = [
     {
-      type: 'required',
-      args: ['--demUrl <string>', 'The URL of the DEM source.'],
+      type: "required",
+      args: ["--demUrl <string>", "The URL of the DEM source."],
     },
     {
-      type: 'option',
-      args: ['--encoding <string>', 'The encoding of the source DEM (e.g., "terrarium", "mapbox").', 'mapbox'],
+      type: "option",
+      args: [
+        "--encoding <string>",
+        'The encoding of the source DEM (e.g., "terrarium", "mapbox").',
+        "mapbox",
+      ],
     },
     {
-      type: 'option',
-      args: ['--sourceMaxZoom <number>', 'The maximum zoom level of the source DEM.', Number, 8],
+      type: "option",
+      args: [
+        "--sourceMaxZoom <number>",
+        "The maximum zoom level of the source DEM.",
+        Number,
+        8,
+      ],
     },
     {
-      type: 'option',
-      args: ['--increment <number>', 'The contour increment value to extract.', Number, 0],
+      type: "option",
+      args: [
+        "--increment <number>",
+        "The contour increment value to extract.",
+        Number,
+        0,
+      ],
     },
     {
-      type: 'option',
-      args: ['--outputMaxZoom <number>', 'The maximum zoom level of the output tile pyramid.', Number, 8],
+      type: "option",
+      args: [
+        "--outputMaxZoom <number>",
+        "The maximum zoom level of the output tile pyramid.",
+        Number,
+        8,
+      ],
     },
     {
-      type: 'option',
-      args: ['--outputDir <string>', 'The output directory where tiles will be stored.', './output'],
+      type: "option",
+      args: [
+        "--outputDir <string>",
+        "The output directory where tiles will be stored.",
+        "./output",
+      ],
     },
     {
-      type: 'option',
-      args: ['--processes <number>', 'The number of parallel processes to use.', Number, 8],
+      type: "option",
+      args: [
+        "--processes <number>",
+        "The number of parallel processes to use.",
+        Number,
+        8,
+      ],
     },
     // --- Blank Tile Options ---
     {
-      type: 'option',
-      args: ['--blankTileNoDataValue <number>', 'The elevation value to use for blank tiles when a DEM tile is missing.', Number, 0],
+      type: "option",
+      args: [
+        "--blankTileNoDataValue <number>",
+        "The elevation value to use for blank tiles when a DEM tile is missing.",
+        Number,
+        0,
+      ],
     },
     {
-      type: 'option',
-      args: ['--blankTileSize <number>', 'The pixel dimension of the tiles (e.g., 256 or 512).', Number, 512],
+      type: "option",
+      args: [
+        "--blankTileSize <number>",
+        "The pixel dimension of the tiles (e.g., 256 or 512).",
+        Number,
+        512,
+      ],
     },
     {
-      type: 'option',
-      args: ['--blankTileFormat <string>', 'The image format for generated blank tiles (\'png\', \'webp\', or \'jpeg\').', 'png'],
+      type: "option",
+      args: [
+        "--blankTileFormat <string>",
+        "The image format for generated blank tiles ('png', 'webp', or 'jpeg').",
+        "png",
+      ],
     },
     // --- Verbose Option ---
     {
-      type: 'option',
-      args: ['-v, --verbose', 'Enable verbose output', false],
+      type: "option",
+      args: ["-v, --verbose", "Enable verbose output", false],
     },
   ];
 
@@ -465,13 +527,16 @@ async function main(): Promise<void> {
     );
 
   // Helper function to apply options to commands
-  const applyCommonOptions = (command: Command.Command, configs: typeof commonOptionConfigs) => {
+  const applyCommonOptions = (
+    command: Command.Command,
+    configs: typeof commonOptionConfigs,
+  ) => {
     for (const config of configs) {
       const { type, args } = config;
-      if (type === 'required') {
-        command.requiredOption(...args as any);
+      if (type === "required") {
+        command.requiredOption(...(args as any));
       } else {
-        command.option(...args as any);
+        command.option(...(args as any));
       }
     }
   };

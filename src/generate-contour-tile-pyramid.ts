@@ -105,8 +105,10 @@ const numblankTileSize = Number(blankTileSize);
 
 const validBlankTileFormats = ["png", "webp", "jpeg"];
 if (!validBlankTileFormats.includes(blankTileFormat)) {
-    console.error(`Invalid value for --blankTileFormat: ${blankTileFormat}. Must be one of: ${validBlankTileFormats.join(', ')}`);
-    process.exit(1);
+  console.error(
+    `Invalid value for --blankTileFormat: ${blankTileFormat}. Must be one of: ${validBlankTileFormats.join(", ")}`,
+  );
+  process.exit(1);
 }
 
 // --------------------------------------------------
@@ -119,15 +121,15 @@ const contourOptions = {
     ? { levels: [numIncrement] }
     : {
         thresholds: {
-        1: [600, 3000],
-        4: [300, 1500],
-        8: [150, 750],
-        9: [80, 400],
-        10: [40, 200],
-        11: [20, 100],
-        12: [10, 50],
-        14: [5, 25],
-        16: [1, 5],
+          1: [600, 3000],
+          4: [300, 1500],
+          8: [150, 750],
+          9: [80, 400],
+          10: [40, 200],
+          11: [20, 100],
+          12: [10, 50],
+          14: [5, 25],
+          16: [1, 5],
         },
       }),
   contourLayer: "contours",
@@ -145,8 +147,9 @@ function getAllTiles(tile: Tile, outputMaxZoom: number): Tile[] {
   let allTiles: Tile[] = [tile];
 
   function getTileList(currentTile: Tile) {
-    const children: Tile[] = getChildren(currentTile)
-      .filter((child) => child[2] <= outputMaxZoom);
+    const children: Tile[] = getChildren(currentTile).filter(
+      (child) => child[2] <= outputMaxZoom,
+    );
 
     allTiles = allTiles.concat(children);
 
@@ -171,17 +174,20 @@ let pmtilesSource: PMTiles | undefined;
 let mbtilesSource: { handle: any; metadata?: { format?: string } } | undefined;
 
 interface TileFetcherResult {
-    data: Blob | undefined;
-    mimeType: string | undefined; // MIME type of the fetched/generated data
-    expires: undefined;
-    cacheControl: undefined;
+  data: Blob | undefined;
+  mimeType: string | undefined; // MIME type of the fetched/generated data
+  expires: undefined;
+  cacheControl: undefined;
 }
 
 interface TileFetcher {
-    (url: string, abortController: AbortController): Promise<TileFetcherResult>;
+  (url: string, abortController: AbortController): Promise<TileFetcherResult>;
 }
 
-const pmtilesFetcher: TileFetcher = async (url: string, _abortController: AbortController) => {
+const pmtilesFetcher: TileFetcher = async (
+  url: string,
+  _abortController: AbortController,
+) => {
   if (!pmtilesSource) {
     throw new Error("PMTiles not initialized.");
   }
@@ -191,28 +197,48 @@ const pmtilesFetcher: TileFetcher = async (url: string, _abortController: AbortC
     throw new Error(`Could not extract zxy from ${url}`);
   }
 
-  const { data: zxyTileData, mimeType: pmtilesMimeType } = await getPMtilesTile(pmtilesSource, zxy.z, zxy.x, zxy.y);
+  const { data: zxyTileData, mimeType: pmtilesMimeType } = await getPMtilesTile(
+    pmtilesSource,
+    zxy.z,
+    zxy.x,
+    zxy.y,
+  );
 
   if (!zxyTileData) {
-    console.warn(`DEM tile not found for ${url} (z:${zxy.z}, x:${zxy.x}, y:${zxy.y}). Generating blank tile.`);
+    console.warn(
+      `DEM tile not found for ${url} (z:${zxy.z}, x:${zxy.x}, y:${zxy.y}). Generating blank tile.`,
+    );
     const sourceMimeType = pmtilesMimeType || `image/${blankTileFormat}`;
-    const formatForBlank = sourceMimeType.split('/')[1] || blankTileFormat;
+    const formatForBlank = sourceMimeType.split("/")[1] || blankTileFormat;
 
     const blankTileBuffer = await createBlankTileImage(
       numblankTileSize,
       numblankTileSize,
       numblankTileNoDataValue,
       encoding as Encoding,
-      formatForBlank as any
+      formatForBlank as any,
     );
-    return { data: new Blob([blankTileBuffer], { type: sourceMimeType }), mimeType: sourceMimeType, expires: undefined, cacheControl: undefined };
+    return {
+      data: new Blob([blankTileBuffer], { type: sourceMimeType }),
+      mimeType: sourceMimeType,
+      expires: undefined,
+      cacheControl: undefined,
+    };
   }
 
-  const mimeType = pmtilesMimeType || 'image/png';
-  return { data: new Blob([zxyTileData], { type: mimeType }), mimeType: mimeType, expires: undefined, cacheControl: undefined };
+  const mimeType = pmtilesMimeType || "image/png";
+  return {
+    data: new Blob([zxyTileData], { type: mimeType }),
+    mimeType: mimeType,
+    expires: undefined,
+    cacheControl: undefined,
+  };
 };
 
-const mbtilesFetcher: TileFetcher = async (url: string, abortController: AbortController) => {
+const mbtilesFetcher: TileFetcher = async (
+  url: string,
+  abortController: AbortController,
+) => {
   if (!mbtilesSource) {
     throw new Error("MBTiles not initialized.");
   }
@@ -223,10 +249,17 @@ const mbtilesFetcher: TileFetcher = async (url: string, abortController: AbortCo
   }
 
   try {
-    const tileData = await getMBTilesTile(mbtilesSource.handle, zxy.z, zxy.x, zxy.y);
+    const tileData = await getMBTilesTile(
+      mbtilesSource.handle,
+      zxy.z,
+      zxy.x,
+      zxy.y,
+    );
 
     if (!tileData || !tileData.data) {
-      console.warn(`DEM tile not found for ${url} (z:${zxy.z}, x:${zxy.x}, y:${zxy.y}). Generating blank tile.`);
+      console.warn(
+        `DEM tile not found for ${url} (z:${zxy.z}, x:${zxy.x}, y:${zxy.y}). Generating blank tile.`,
+      );
       const sourceFormat = mbtilesSource.metadata?.format || blankTileFormat;
 
       const blankTileBuffer = await createBlankTileImage(
@@ -234,38 +267,56 @@ const mbtilesFetcher: TileFetcher = async (url: string, abortController: AbortCo
         numblankTileSize,
         numblankTileNoDataValue,
         encoding as Encoding,
-        sourceFormat as any
+        sourceFormat as any,
       );
       const blobType = `image/${sourceFormat}`;
-      return { data: new Blob([blankTileBuffer], { type: blobType }), mimeType: blobType, expires: undefined, cacheControl: undefined };
+      return {
+        data: new Blob([blankTileBuffer], { type: blobType }),
+        mimeType: blobType,
+        expires: undefined,
+        cacheControl: undefined,
+      };
     }
 
-    let blobType = 'image/png'; // Default
+    let blobType = "image/png"; // Default
     if (tileData.contentType) {
-        blobType = tileData.contentType;
+      blobType = tileData.contentType;
     }
-    return { data: new Blob([tileData.data], { type: blobType }), mimeType: blobType, expires: undefined, cacheControl: undefined };
-
+    return {
+      data: new Blob([tileData.data], { type: blobType }),
+      mimeType: blobType,
+      expires: undefined,
+      cacheControl: undefined,
+    };
   } catch (error: any) {
-    if (error.message.includes("Tile does not exist") || error.message.includes("no such row")) {
-        console.warn(`DEM tile not found for ${url} (z:${zxy.z}, x:${zxy.x}, y:${zxy.y}). Generating blank tile.`);
-        const sourceFormat = mbtilesSource.metadata?.format || blankTileFormat;
+    if (
+      error.message.includes("Tile does not exist") ||
+      error.message.includes("no such row")
+    ) {
+      console.warn(
+        `DEM tile not found for ${url} (z:${zxy.z}, x:${zxy.x}, y:${zxy.y}). Generating blank tile.`,
+      );
+      const sourceFormat = mbtilesSource.metadata?.format || blankTileFormat;
 
-        const blankTileBuffer = await createBlankTileImage(
-            numblankTileSize,
-            numblankTileSize,
-            numblankTileNoDataValue,
-            encoding as Encoding,
-            sourceFormat as any
-        );
-        const blobType = `image/${sourceFormat}`;
-        return { data: new Blob([blankTileBuffer], { type: blobType }), mimeType: blobType, expires: undefined, cacheControl: undefined };
+      const blankTileBuffer = await createBlankTileImage(
+        numblankTileSize,
+        numblankTileSize,
+        numblankTileNoDataValue,
+        encoding as Encoding,
+        sourceFormat as any,
+      );
+      const blobType = `image/${sourceFormat}`;
+      return {
+        data: new Blob([blankTileBuffer], { type: blobType }),
+        mimeType: blobType,
+        expires: undefined,
+        cacheControl: undefined,
+      };
     } else {
-        throw error;
+      throw error;
     }
   }
 };
-
 
 // --------------------------------------------------
 // DEM Manager Setup
@@ -309,7 +360,9 @@ const demManagerOptions = {
   getTile: currentFetcher,
 };
 
-const manager = demUrlPattern ? new mlcontour.LocalDemManager(demManagerOptions) : null;
+const manager = demUrlPattern
+  ? new mlcontour.LocalDemManager(demManagerOptions)
+  : null;
 
 // --------------------------------------------------
 // Tile Processing Function (using the manager)
@@ -317,7 +370,7 @@ const manager = demUrlPattern ? new mlcontour.LocalDemManager(demManagerOptions)
 
 async function processTile(v: Tile): Promise<void> {
   if (!manager) {
-      throw new Error("LocalDemManager is not initialized. Check DEM URL.");
+    throw new Error("LocalDemManager is not initialized. Check DEM URL.");
   }
 
   const z: number = v[2];
@@ -336,24 +389,29 @@ async function processTile(v: Tile): Promise<void> {
   }
 
   try {
-      const tile = await manager.fetchContourTile(z, x, y, tileOptions, new AbortController());
-      const tileBuffer = Buffer.from(tile.arrayBuffer);
+    const tile = await manager.fetchContourTile(
+      z,
+      x,
+      y,
+      tileOptions,
+      new AbortController(),
+    );
+    const tileBuffer = Buffer.from(tile.arrayBuffer);
 
-      await new Promise<void>((resolve, reject) => {
-        mkdir(dirPath, { recursive: true }, (err) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          writeFileSync(filePath, tileBuffer);
-          resolve();
-        });
+    await new Promise<void>((resolve, reject) => {
+      mkdir(dirPath, { recursive: true }, (err) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        writeFileSync(filePath, tileBuffer);
+        resolve();
       });
+    });
   } catch (error: any) {
-      console.error(`Error processing tile ${z}/${x}/${y}: ${error.message}`);
+    console.error(`Error processing tile ${z}/${x}/${y}: ${error.message}`);
   }
 }
-
 
 async function processQueue(
   queue: Tile[],
@@ -387,20 +445,30 @@ if (!existsSync(outputDir)) {
   console.log(`Creating output directory: ${outputDir}`);
   mkdir(outputDir, { recursive: true }, (err) => {
     if (err) {
-      console.error(`Failed to create output directory ${outputDir}: ${err.message}`);
+      console.error(
+        `Failed to create output directory ${outputDir}: ${err.message}`,
+      );
       process.exit(1);
     }
   });
 }
 
 if (manager) {
-  processQueue(children).then(() => {
-    console.log(`All contour tiles for pyramid originating from ${z}/${x}/${y} have been written!`);
-  }).catch(error => {
-    console.error(`An error occurred during the tile generation process: ${error.message}`);
-    process.exit(1);
-  });
+  processQueue(children)
+    .then(() => {
+      console.log(
+        `All contour tiles for pyramid originating from ${z}/${x}/${y} have been written!`,
+      );
+    })
+    .catch((error) => {
+      console.error(
+        `An error occurred during the tile generation process: ${error.message}`,
+      );
+      process.exit(1);
+    });
 } else {
-    console.error("Failed to initialize DEM manager. Check DEM URL and ensure it's a supported format (PMTiles, MBTiles, or a tile URL pattern).");
-    process.exit(1);
+  console.error(
+    "Failed to initialize DEM manager. Check DEM URL and ensure it's a supported format (PMTiles, MBTiles, or a tile URL pattern).",
+  );
+  process.exit(1);
 }

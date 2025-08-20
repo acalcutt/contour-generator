@@ -29,27 +29,33 @@ export async function createBlankTileImage(
   height: number,
   elevationValue: number,
   encoding: Encoding,
-  outputFormat: 'png' | 'webp' | 'jpeg',
+  outputFormat: "png" | "webp" | "jpeg",
 ): Promise<Buffer> {
   const rgbData = new Uint8Array(width * height * 3); // 3 bytes per pixel (R, G, B)
 
-  let r = 0, g = 0, b = 0;
+  let r = 0,
+    g = 0,
+    b = 0;
 
-  if (encoding === 'terrarium') {
-    const scaledValue = Math.round((elevationValue + TERRARIUM_OFFSET) * TERRARIUM_MULT);
-    const clampedValue = Math.max(0, Math.min(0xFFFFFF, scaledValue)); // Clamp for 24-bit color
+  if (encoding === "terrarium") {
+    const scaledValue = Math.round(
+      (elevationValue + TERRARIUM_OFFSET) * TERRARIUM_MULT,
+    );
+    const clampedValue = Math.max(0, Math.min(0xffffff, scaledValue)); // Clamp for 24-bit color
 
-    r = (clampedValue >> 16) & 0xFF;
-    g = (clampedValue >> 8) & 0xFF;
-    b = clampedValue & 0xFF;
+    r = (clampedValue >> 16) & 0xff;
+    g = (clampedValue >> 8) & 0xff;
+    b = clampedValue & 0xff;
+  } else {
+    // 'mapbox' encoding - using the hardcoded defaults
+    const rgbIntValue = Math.round(
+      (elevationValue + MAPBOX_OFFSET_DEFAULT) * (1 / MAPBOX_INTERVAL_DEFAULT),
+    );
+    const clampedRgbIntValue = Math.max(0, Math.min(0xffffff, rgbIntValue)); // Clamp for 24-bit color
 
-  } else { // 'mapbox' encoding - using the hardcoded defaults
-    const rgbIntValue = Math.round((elevationValue + MAPBOX_OFFSET_DEFAULT) * (1 / MAPBOX_INTERVAL_DEFAULT));
-    const clampedRgbIntValue = Math.max(0, Math.min(0xFFFFFF, rgbIntValue)); // Clamp for 24-bit color
-
-    r = (clampedRgbIntValue >> 16) & 0xFF;
-    g = (clampedRgbIntValue >> 8) & 0xFF;
-    b = clampedRgbIntValue & 0xFF;
+    r = (clampedRgbIntValue >> 16) & 0xff;
+    g = (clampedRgbIntValue >> 8) & 0xff;
+    b = clampedRgbIntValue & 0xff;
   }
 
   for (let i = 0; i < width * height; i++) {
@@ -59,19 +65,19 @@ export async function createBlankTileImage(
   }
 
   const image = sharp(Buffer.from(rgbData), {
-      raw: {
-          width: width,
-          height: height,
-          channels: 3 // R, G, B
-      }
+    raw: {
+      width: width,
+      height: height,
+      channels: 3, // R, G, B
+    },
   });
 
-  if (outputFormat === 'webp') {
-      return image.toFormat('webp', { lossless: true }).toBuffer();
+  if (outputFormat === "webp") {
+    return image.toFormat("webp", { lossless: true }).toBuffer();
   } else {
-      // For PNG and JPEG, use the quality option where applicable
-      const quality = outputFormat === 'jpeg' ? 80 : undefined;
-      return image.toFormat(outputFormat, { quality }).toBuffer();
+    // For PNG and JPEG, use the quality option where applicable
+    const quality = outputFormat === "jpeg" ? 80 : undefined;
+    return image.toFormat(outputFormat, { quality }).toBuffer();
   }
 }
 
