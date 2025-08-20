@@ -127,6 +127,8 @@ The -v ```$(pwd):/data``` part of the docker run command maps your local working
 
 # Install Locally on linux
 ```
+git clone https://github.com/acalcutt/contour-generator.git
+cd contour-generator
 npm install
 ```
 
