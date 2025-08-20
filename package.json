@@ -8,6 +8,7 @@
     "format": "prettier --write \"**/*.{ts,js,json}\"",
     "lint": "eslint \"**/*.{ts,js}\"",
     "check": "npm run format && npm run lint",
+    "generate-contour-tile-pyramid": "tsx src/generate-contour-tile-pyramid.ts",
     "generate-contours": "tsx src/index.ts"
   },
   "repository": {
