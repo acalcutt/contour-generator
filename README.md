@@ -77,7 +77,7 @@ zoom function (using Docker w/pmtiles local source):
 # View Help
  docker run -it -v $(pwd):/data wifidb/contour-generator zoom --help
 
-# Downlad example test data into your local directory
+# Download example test data into your local directory
  wget https://github.com/acalcutt/contour_generator/releases/download/test_data/JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles
 
 # Example
@@ -160,7 +160,7 @@ zoom function (Run Locally w/pmtiles local source):
 # View Help
  npm run generate-contours -- zoom --help
 
-# Downlad the test data into your local directory
+# Download the test data into your local directory
  wget https://github.com/acalcutt/contour_generator/releases/download/test_data/JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles
 
 #Example
