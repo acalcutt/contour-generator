@@ -75,6 +75,8 @@ program
     "The image format for generated blank tiles ('png', 'webp', or 'jpeg'). This is used as a fallback if the source format cannot be determined.",
     "png", // Default format for blank tiles
   )
+  // ADD THE VERBOSE OPTION HERE
+  .option("-v, --verbose", "Enable verbose output.")
   .parse(process.argv);
 
 const options = program.opts();
@@ -91,6 +93,7 @@ const {
   outputDir,
   blankTileSize,
   blankTileFormat,
+  verbose, // Capture the verbose option
 } = options;
 
 const numX = Number(x);
@@ -105,7 +108,9 @@ const numblankTileSize = Number(blankTileSize);
 const validBlankTileFormats = ["png", "webp", "jpeg"];
 if (!validBlankTileFormats.includes(blankTileFormat)) {
   console.error(
-    `Invalid value for --blankTileFormat: ${blankTileFormat}. Must be one of: ${validBlankTileFormats.join(", ")}`,
+    `Invalid value for --blankTileFormat: ${blankTileFormat}. Must be one of: ${validBlankTileFormats.join(
+      ", ",
+    )}`,
   );
   process.exit(1);
 }
@@ -196,6 +201,10 @@ const pmtilesFetcher: TileFetcher = async (
     throw new Error(`Could not extract zxy from ${url}`);
   }
 
+  if (verbose) {
+    console.log(`[Fetcher] Fetching PMTiles: ${url} for ZXY: ${zxy.z}-${zxy.x}-${zxy.y}`);
+  }
+
   const { data: zxyTileData, mimeType: pmtilesMimeType } = await getPMtilesTile(
     pmtilesSource,
     zxy.z,
@@ -245,6 +254,10 @@ const mbtilesFetcher: TileFetcher = async (
   const zxy = extractZXYFromUrlTrim(url);
   if (!zxy) {
     throw new Error(`Could not extract zxy from ${url}`);
+  }
+
+  if (verbose) {
+    console.log(`[Fetcher] Fetching MBTiles: ${url} for ZXY: ${zxy.z}-${zxy.x}-${zxy.y}`);
   }
 
   try {
@@ -327,22 +340,31 @@ let demUrlPattern: string | undefined;
 async function initializeSources() {
   if (pmtilesTester.test(demUrl)) {
     const pmtilesPath = demUrl.replace(pmtilesTester, "");
+    if (verbose) {
+      console.log(`[Init] Initializing PMTiles from: ${pmtilesPath}`);
+    }
     pmtilesSource = openPMtiles(pmtilesPath);
     currentFetcher = pmtilesFetcher;
-    demUrlPattern = "/{z}/{x}/{y}";
+    demUrlPattern = "/{z}/{x}/{y}"; // This pattern is used by mlcontour's manager
   } else if (mbtilesTester.test(demUrl)) {
     const mbtilesPath = demUrl.replace(mbtilesTester, "");
     if (!existsSync(mbtilesPath)) {
       console.error(`MBTiles file not found at: ${mbtilesPath}`);
       process.exit(1);
     }
+    if (verbose) {
+      console.log(`[Init] Initializing MBTiles from: ${mbtilesPath}`);
+    }
     // Await the result of openMBTiles because it's now asynchronous
     mbtilesSource = await openMBTiles(mbtilesPath); // This returns { handle, metadata }
     currentFetcher = mbtilesFetcher;
-    demUrlPattern = "/{z}/{x}/{y}";
+    demUrlPattern = "/{z}/{x}/{y}"; // This pattern is used by mlcontour's manager
   } else {
+    if (verbose) {
+      console.log(`[Init] Using URL pattern: ${demUrl}`);
+    }
     demUrlPattern = demUrl;
-    currentFetcher = undefined;
+    currentFetcher = undefined; // For direct URL fetching if not PMTiles/MBTiles
   }
 }
 
@@ -355,8 +377,8 @@ const demManagerOptions = {
   maxzoom: numsourceMaxZoom,
   timeoutMs: 10000,
   decodeImage: GetImageData,
-  demUrlPattern: demUrlPattern,
-  getTile: currentFetcher,
+  demUrlPattern: demUrlPattern, // Pass the determined pattern
+  getTile: currentFetcher, // Pass the appropriate fetcher function
 };
 
 const manager = demUrlPattern
@@ -379,7 +401,14 @@ async function processTile(v: Tile): Promise<void> {
   const filePath: string = path.join(dirPath, `${y}.pbf`);
 
   if (existsSync(filePath)) {
+    if (verbose) {
+      console.log(`[Tile ${z}-${x}-${y}] Tile already exists. Skipping.`);
+    }
     return Promise.resolve();
+  }
+
+  if (verbose) {
+    console.log(`[Tile ${z}-${x}-${y}] Generating contour tile...`);
   }
 
   let tileOptions = contourOptions;
@@ -393,10 +422,11 @@ async function processTile(v: Tile): Promise<void> {
       x,
       y,
       tileOptions,
-      new AbortController(),
+      new AbortController(), // AbortController can be used for timeout/cancellation
     );
     const tileBuffer = Buffer.from(tile.arrayBuffer);
 
+    // Ensure directory exists before writing
     await new Promise<void>((resolve, reject) => {
       mkdir(dirPath, { recursive: true }, (err) => {
         if (err) {
@@ -407,24 +437,43 @@ async function processTile(v: Tile): Promise<void> {
         resolve();
       });
     });
+    if (verbose) {
+      console.log(`[Tile ${z}-${x}-${y}] Successfully wrote ${filePath}`);
+    }
   } catch (error: any) {
+    // Log error, but don't necessarily exit here as it might be a single tile failure
     console.error(`Error processing tile ${z}/${x}/${y}: ${error.message}`);
+    // Re-throwing might be necessary if we want the main process to catch it and exit
+    throw error;
   }
 }
 
 async function processQueue(
   queue: Tile[],
-  batchSize: number = 25,
+  batchSize: number = 25, // Process in batches to manage concurrent Promises
 ): Promise<void> {
   for (let i = 0; i < queue.length; i += batchSize) {
     const batch = queue.slice(i, i + batchSize);
     console.log(
-      `Processing batch ${i / batchSize + 1} of ${Math.ceil(queue.length / batchSize)} for source tile ${z}/${x}/${y}`,
+      `Processing batch ${i / batchSize + 1} of ${Math.ceil(
+        queue.length / batchSize,
+      )} for source tile ${z}/${x}/${y}`,
     );
-    await Promise.all(batch.map(processTile));
-    console.log(
-      `Completed batch ${i / batchSize + 1} of ${Math.ceil(queue.length / batchSize)} for source tile ${z}/${x}/${y}`,
-    );
+    try {
+      await Promise.all(batch.map(processTile));
+      console.log(
+        `Completed batch ${i / batchSize + 1} of ${Math.ceil(
+          queue.length / batchSize,
+        )} for source tile ${z}/${x}/${y}`,
+      );
+    } catch (error) {
+      // If any tile in the batch fails, catch the error to prevent stopping the loop
+      // unless we explicitly want to stop on first error.
+      // For now, log and continue processing other batches.
+      console.error(`Error in batch starting at index ${i}:`, error);
+      // If you want to stop on first error, uncomment the next line:
+      // throw error;
+    }
   }
 }
 
@@ -434,19 +483,21 @@ async function processQueue(
 
 const children: Tile[] = getAllTiles([numX, numY, numZ], numoutputMaxZoom);
 
+// Sort children for more predictable processing order (optional but good practice)
 children.sort((a, b) => {
-  if (a[2] !== b[2]) return a[2] - b[2];
-  if (a[0] !== b[0]) return a[0] - b[0];
-  return a[1] - b[1];
+  if (a[2] !== b[2]) return a[2] - b[2]; // Sort by zoom level
+  if (a[0] !== b[0]) return a[0] - b[0]; // Sort by X
+  return a[1] - b[1]; // Sort by Y
 });
 
+// Ensure the base output directory exists
 if (!existsSync(outputDir)) {
-  console.log(`Creating output directory: ${outputDir}`);
+  if (verbose) {
+    console.log(`Creating output directory: ${outputDir}`);
+  }
   mkdir(outputDir, { recursive: true }, (err) => {
     if (err) {
-      console.error(
-        `Failed to create output directory ${outputDir}: ${err.message}`,
-      );
+      console.error(`Failed to create output directory ${outputDir}: ${err.message}`);
       process.exit(1);
     }
   });
