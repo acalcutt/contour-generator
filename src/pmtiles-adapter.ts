@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import { PMTiles, FetchSource, type Source } from "pmtiles";
-import { existsSync } from "fs";
 
 const httpTester = /^https?:\/\//i;
 export const pmtilesTester = /^pmtiles:\/\//i;

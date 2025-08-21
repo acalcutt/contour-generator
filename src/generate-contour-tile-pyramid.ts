@@ -1,6 +1,5 @@
 import { Command } from "commander";
 import { writeFileSync, mkdir, existsSync } from "fs";
-import sharp from "sharp";
 import { default as mlcontour } from "../node_modules/maplibre-contour/dist/index.mjs";
 import {
   extractZXYFromUrlTrim,
@@ -237,7 +236,7 @@ const pmtilesFetcher: TileFetcher = async (
 
 const mbtilesFetcher: TileFetcher = async (
   url: string,
-  abortController: AbortController,
+  _abortController: AbortController,
 ) => {
   if (!mbtilesSource) {
     throw new Error("MBTiles not initialized.");
