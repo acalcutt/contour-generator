@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { spawn, ChildProcessWithoutNullStreams } from "child_process";
+import { spawn } from "child_process";
 import path from "path";
 import { writeFileSync, existsSync, mkdirSync } from "fs";
 import { bboxToTiles } from "./bbox_to_tiles";
@@ -37,8 +37,6 @@ type BboxOptions = BaseOptions & {
   outputMinZoom: number;
 };
 
-// --- Helper Functions ---
-
 /**
  * Helper function to validate encoding
  */
@@ -60,7 +58,6 @@ async function createMetadata(
   outputMinZoom: number,
   outputMaxZoom: number,
 ): Promise<void> {
-  // Ensure output directory exists
   if (!existsSync(outputDir)) {
     mkdirSync(outputDir, { recursive: true });
   }
@@ -139,7 +136,11 @@ async function processTile(options: PyramidOptions): Promise<void> {
       options.blankTileFormat,
     ];
 
-    // Spawn the child process
+    // Pass the verbose flag down to the child process ONLY if the orchestrator is verbose
+    if (options.verbose) {
+      commandArgs.push("--verbose"); // Pass the verbose flag to the child
+    }
+
     const workerProcess = spawn("npm", commandArgs, {
       stdio: ["ignore", "pipe", "pipe"], // Capture stdout and stderr
       shell: false, // Use false for better security and performance
@@ -153,17 +154,26 @@ async function processTile(options: PyramidOptions): Promise<void> {
 
     workerProcess.stdout.on("data", (data) => {
       stdoutBuffer += data.toString();
-      // Process buffered data line by line if verbose
+      // Process captured output if orchestrator is verbose.
+      // We trust the child process to handle its own verbose output; this capture
+      // is mainly for potential error logging or if the child isn't verbose.
       if (options.verbose) {
         const lines = stdoutBuffer.split("\n");
-        stdoutBuffer = lines.pop() || "";
+        stdoutBuffer = lines.pop() || ""; // Keep the last (potentially partial) line
+        // Log with orchestrator's prefix, but only if it's not already verbose output from child
+        // This is still tricky. The robust solution is to NOT log here and let the child's verbose logs appear.
+        // However, for debugging purposes, logging captured data is useful.
+        // The duplicate "Starting..." and "Finished..." are from the orchestrator's own handlers.
+        // We should avoid double-logging the CHILD's output.
+        //
+        // For now, let's keep the logging here, but be aware it might duplicate child's --verbose output.
+        // The FIX for the "Starting..." and "Finished..." duplication is in the orchestrator handlers themselves.
         lines.forEach((line) => console.log(processPrefix + line.trim()));
       }
     });
 
     workerProcess.stderr.on("data", (data) => {
       stderrBuffer += data.toString();
-      // Process buffered data line by line if verbose
       if (options.verbose) {
         const lines = stderrBuffer.split("\n");
         stderrBuffer = lines.pop() || "";
@@ -172,7 +182,7 @@ async function processTile(options: PyramidOptions): Promise<void> {
     });
 
     workerProcess.on("close", (code) => {
-      // Flush any remaining buffered data if verbose
+      // Flush any remaining buffered data if verbose, primarily for error reporting
       if (options.verbose) {
         if (stdoutBuffer) console.log(processPrefix + stdoutBuffer.trim());
         if (stderrBuffer) console.error(processPrefix + stderrBuffer.trim());
@@ -180,14 +190,14 @@ async function processTile(options: PyramidOptions): Promise<void> {
 
       if (code === 0) {
         if (options.verbose) {
-          console.log(processPrefix + "Finished successfully.");
+          console.log(processPrefix + "Finished successfully."); // Orchestrator's own status message
         }
         resolve();
       } else {
         // Reject with a more informative error, including stderr content
         reject(
           new Error(
-            `${processPrefix}Exited with code ${code}. Last stderr: "${stderrBuffer.trim()}"`,
+            `${processPrefix}Exited with code ${code}. Captured stderr: "${stderrBuffer.trim()}"`,
           ),
         );
       }
@@ -268,7 +278,7 @@ async function processTilesInParallel(
               `[Main] Error processing tile ${z}-${x}-${y}:`,
               error,
             );
-            reject(error);
+            reject(error); // Reject the main promise if any tile fails
           })
           .finally(() => {
             // Remove this worker from the active pool
@@ -368,95 +378,110 @@ async function main(): Promise<void> {
     .name("contour-generator")
     .description("Generates contours from DEM tiles.");
 
-  // --- Define common option configurations ---
-  const commonOptionConfigs = [
+  // --- Define common option configurations with proper typing ---
+  type RequiredOptionConfig = {
+    type: "required";
+    flags: string;
+    description: string;
+  };
+
+  type StandardOptionConfig = {
+    type: "standard";
+    flags: string;
+    description: string;
+    defaultValue: string | boolean;
+  };
+
+  type ParsedOptionConfig = {
+    type: "parsed";
+    flags: string;
+    description: string;
+    parser: NumberConstructor;
+    defaultValue: number;
+  };
+
+  type OptionConfig =
+    | RequiredOptionConfig
+    | StandardOptionConfig
+    | ParsedOptionConfig;
+
+  const commonOptionConfigs: OptionConfig[] = [
+    // required options
     {
       type: "required",
-      args: ["--demUrl <string>", "The URL of the DEM source."],
+      flags: "--demUrl <string>",
+      description: "The URL of the DEM source.",
     },
+    // standard options (string/boolean only)
     {
-      type: "option",
-      args: [
-        "--encoding <string>",
+      type: "standard",
+      flags: "--encoding <string>",
+      description:
         'The encoding of the source DEM (e.g., "terrarium", "mapbox").',
-        "mapbox",
-      ],
+      defaultValue: "mapbox",
     },
     {
-      type: "option",
-      args: [
-        "--sourceMaxZoom <number>",
-        "The maximum zoom level of the source DEM.",
-        Number,
-        8,
-      ],
+      type: "standard",
+      flags: "--outputDir <string>",
+      description: "The output directory where tiles will be stored.",
+      defaultValue: "./output",
     },
     {
-      type: "option",
-      args: [
-        "--increment <number>",
-        "The contour increment value to extract.",
-        Number,
-        0,
-      ],
-    },
-    {
-      type: "option",
-      args: [
-        "--outputMaxZoom <number>",
-        "The maximum zoom level of the output tile pyramid.",
-        Number,
-        8,
-      ],
-    },
-    {
-      type: "option",
-      args: [
-        "--outputDir <string>",
-        "The output directory where tiles will be stored.",
-        "./output",
-      ],
-    },
-    {
-      type: "option",
-      args: [
-        "--processes <number>",
-        "The number of parallel processes to use.",
-        Number,
-        8,
-      ],
-    },
-    // --- Blank Tile Options ---
-    {
-      type: "option",
-      args: [
-        "--blankTileNoDataValue <number>",
-        "The elevation value to use for blank tiles when a DEM tile is missing.",
-        Number,
-        0,
-      ],
-    },
-    {
-      type: "option",
-      args: [
-        "--blankTileSize <number>",
-        "The pixel dimension of the tiles (e.g., 256 or 512).",
-        Number,
-        512,
-      ],
-    },
-    {
-      type: "option",
-      args: [
-        "--blankTileFormat <string>",
+      type: "standard",
+      flags: "--blankTileFormat <string>",
+      description:
         "The image format for generated blank tiles ('png', 'webp', or 'jpeg').",
-        "png",
-      ],
+      defaultValue: "png",
     },
-    // --- Verbose Option ---
     {
-      type: "option",
-      args: ["-v, --verbose", "Enable verbose output", false],
+      type: "standard",
+      flags: "-v, --verbose",
+      description: "Enable verbose output",
+      defaultValue: false,
+    },
+    // parsed options (numbers that need parsing)
+    {
+      type: "parsed",
+      flags: "--sourceMaxZoom <number>",
+      description: "The maximum zoom level of the source DEM.",
+      parser: Number,
+      defaultValue: 8,
+    },
+    {
+      type: "parsed",
+      flags: "--increment <number>",
+      description: "The contour increment value to extract.",
+      parser: Number,
+      defaultValue: 0,
+    },
+    {
+      type: "parsed",
+      flags: "--outputMaxZoom <number>",
+      description: "The maximum zoom level of the output tile pyramid.",
+      parser: Number,
+      defaultValue: 8,
+    },
+    {
+      type: "parsed",
+      flags: "--processes <number>",
+      description: "The number of parallel processes to use.",
+      parser: Number,
+      defaultValue: 8,
+    },
+    {
+      type: "parsed",
+      flags: "--blankTileNoDataValue <number>",
+      description:
+        "The elevation value to use for blank tiles when a DEM tile is missing.",
+      parser: Number,
+      defaultValue: 0,
+    },
+    {
+      type: "parsed",
+      flags: "--blankTileSize <number>",
+      description: "The pixel dimension of the tiles (e.g., 256 or 512).",
+      parser: Number,
+      defaultValue: 512,
     },
   ];
 
@@ -527,16 +552,21 @@ async function main(): Promise<void> {
     );
 
   // Helper function to apply options to commands
-  const applyCommonOptions = (
-    command: Command.Command,
-    configs: typeof commonOptionConfigs,
-  ) => {
+  const applyCommonOptions = (command: Command, configs: OptionConfig[]) => {
     for (const config of configs) {
-      const { type, args } = config;
-      if (type === "required") {
-        command.requiredOption(...(args as any));
+      if (config.type === "required") {
+        command.requiredOption(config.flags, config.description);
+      } else if (config.type === "parsed") {
+        // This is a ParsedOptionConfig - needs parser
+        command.option(
+          config.flags,
+          config.description,
+          config.parser,
+          config.defaultValue,
+        );
       } else {
-        command.option(...(args as any));
+        // This is a StandardOptionConfig - string/boolean only
+        command.option(config.flags, config.description, config.defaultValue);
       }
     }
   };
