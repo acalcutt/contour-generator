@@ -8,7 +8,9 @@ export const mbtilesTester = /^mbtiles:\/\//i;
  * @param FilePath The path to the MBTiles file.
  * @returns A Promise resolving to an object containing the MBTiles handle and its metadata.
  */
-export async function openMBTiles(FilePath: string): Promise<{ handle: any; metadata?: { format?: string } }> {
+export async function openMBTiles(
+  FilePath: string,
+): Promise<{ handle: any; metadata?: { format?: string } }> {
   if (!existsSync(FilePath)) {
     throw new Error(`MBTiles file not found at: ${FilePath}`);
   }
@@ -17,7 +19,9 @@ export async function openMBTiles(FilePath: string): Promise<{ handle: any; meta
     // Use the constructor with just the file path and callback - no options object
     new MBTiles(FilePath, (err: any, mbtilesHandle: any) => {
       if (err) {
-        console.error(`Failed to open MBTiles file ${FilePath}: ${err.message}`);
+        console.error(
+          `Failed to open MBTiles file ${FilePath}: ${err.message}`,
+        );
         reject(err);
         return;
       }
@@ -25,7 +29,9 @@ export async function openMBTiles(FilePath: string): Promise<{ handle: any; meta
       // Get metadata using the handle's getInfo method
       mbtilesHandle.getInfo((infoErr: any, info: any) => {
         if (infoErr) {
-          console.warn(`Could not retrieve MBTiles info for ${FilePath}: ${infoErr.message}`);
+          console.warn(
+            `Could not retrieve MBTiles info for ${FilePath}: ${infoErr.message}`,
+          );
           // Still resolve with the handle, but without metadata
           resolve({ handle: mbtilesHandle, metadata: undefined });
           return;
@@ -35,7 +41,9 @@ export async function openMBTiles(FilePath: string): Promise<{ handle: any; meta
         if (info && info.format) {
           metadata = { format: info.format };
         } else {
-          console.warn("Could not retrieve MBTiles format from metadata, falling back to png for blank tiles.");
+          console.warn(
+            "Could not retrieve MBTiles format from metadata, falling back to png for blank tiles.",
+          );
         }
 
         resolve({ handle: mbtilesHandle, metadata });
@@ -61,7 +69,11 @@ export async function getMBTilesTile(
   return new Promise((resolve, reject) => {
     mbtilesHandle.getTile(z, x, y, (err: any, tileData: any, headers: any) => {
       if (err) {
-        if (err.message && (err.message.includes("Tile does not exist") || err.message.includes("no such row"))) {
+        if (
+          err.message &&
+          (err.message.includes("Tile does not exist") ||
+            err.message.includes("no such row"))
+        ) {
           resolve({ data: undefined, contentType: undefined });
           return;
         }
@@ -75,7 +87,7 @@ export async function getMBTilesTile(
         return;
       }
 
-      const contentType = headers?.['Content-Type'] || headers?.contentType;
+      const contentType = headers?.["Content-Type"] || headers?.contentType;
       resolve({ data: tileData, contentType });
     });
   });

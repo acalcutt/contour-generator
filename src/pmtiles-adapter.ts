@@ -1,26 +1,44 @@
 import fs from "node:fs";
 import { PMTiles, FetchSource, type Source } from "pmtiles";
-import { existsSync } from "fs";
 
 const httpTester = /^https?:\/\//i;
 export const pmtilesTester = /^pmtiles:\/\//i;
 
 export class PMTilesFileSource implements Source {
   private fd: number;
-  constructor(fd: number) { this.fd = fd; }
-  getKey(): string { return String(this.fd); }
-  async getBytes(offset: number, length: number): Promise<{ data: ArrayBuffer }> {
+  constructor(fd: number) {
+    this.fd = fd;
+  }
+  getKey(): string {
+    return String(this.fd);
+  }
+  async getBytes(
+    offset: number,
+    length: number,
+  ): Promise<{ data: ArrayBuffer }> {
     const buffer = Buffer.alloc(length);
     await readFileBytes(this.fd, buffer, offset);
-    return { data: buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) };
+    return {
+      data: buffer.buffer.slice(
+        buffer.byteOffset,
+        buffer.byteOffset + buffer.byteLength,
+      ),
+    };
   }
 }
 
-async function readFileBytes(fd: number, buffer: Buffer, offset: number): Promise<void> {
+async function readFileBytes(
+  fd: number,
+  buffer: Buffer,
+  offset: number,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     fs.read(fd, buffer, 0, buffer.length, offset, (err, bytesRead, _buff) => {
       if (err) return reject(err);
-      if (bytesRead !== buffer.length) return reject(new Error(`Failed to read ${buffer.length} bytes, got ${bytesRead}`));
+      if (bytesRead !== buffer.length)
+        return reject(
+          new Error(`Failed to read ${buffer.length} bytes, got ${bytesRead}`),
+        );
       resolve();
     });
   });
@@ -28,12 +46,18 @@ async function readFileBytes(fd: number, buffer: Buffer, offset: number): Promis
 
 function getPmtilesMimeTypeFromTypeNum(tileTypeNum: number): string {
   switch (tileTypeNum) {
-    case 1: return 'application/x-protobuf'; // pbf
-    case 2: return 'image/png';
-    case 3: return 'image/jpeg';
-    case 4: return 'image/webp';
-    case 5: return 'image/avif';
-    default: return 'application/octet-stream';
+    case 1:
+      return "application/x-protobuf"; // pbf
+    case 2:
+      return "image/png";
+    case 3:
+      return "image/jpeg";
+    case 4:
+      return "image/webp";
+    case 5:
+      return "image/avif";
+    default:
+      return "application/octet-stream";
   }
 }
 
@@ -51,13 +75,17 @@ export function openPMtiles(FilePath: string): PMTiles {
     }
     return pmtiles;
   } catch (error: any) {
-    console.error(`Failed to open PMTiles source ${FilePath}: ${error.message}`);
+    console.error(
+      `Failed to open PMTiles source ${FilePath}: ${error.message}`,
+    );
     throw error;
   }
 }
 
 // New exported function to get MIME type from PMTiles instance
-export async function getPMTilesMimeType(pmtiles: PMTiles): Promise<string | undefined> {
+export async function getPMTilesMimeType(
+  pmtiles: PMTiles,
+): Promise<string | undefined> {
   try {
     const header = await pmtiles.getHeader();
     return getPmtilesMimeTypeFromTypeNum(header.tileType);
@@ -87,7 +115,10 @@ export async function getPMtilesTile(
       return { data: undefined, mimeType: mimeType };
     }
   } catch (error: any) {
-    console.error(`Error fetching PMTiles tile (z:${z}, x:${x}, y:${y}):`, error.message);
+    console.error(
+      `Error fetching PMTiles tile (z:${z}, x:${x}, y:${y}):`,
+      error.message,
+    );
     return { data: undefined, mimeType: undefined };
   }
 }
