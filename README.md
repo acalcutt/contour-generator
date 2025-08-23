@@ -60,91 +60,100 @@ The docker image wifidb/contour-generator can be used for generating tiles in di
 
 ## Docker Examples:
 
-### pyramid function (using Docker w/pmtiles https source):
-
-```bash
+pyramid function (using Docker w/pmtiles https source):
+```
 # View Help
-docker run --rm -v $(pwd):/data wifidb/contour-generator pyramid --help
+ docker run -it -v $(pwd):/data wifidb/contour-generator pyramid --help
 
 # Example
-docker run --rm -v $(pwd):/data wifidb/contour-generator \
-  pyramid \
-  --z 9 \
-  --x 272 \
-  --y 179 \
-  --demUrl "pmtiles://https://acalcutt.github.io/contour_generator/test_data/terrain-tiles.pmtiles" \
-  --sourceMaxZoom 12 \
-  --encoding mapbox \
-  --increment 0 \
-  --outputDir "/data/output_pyramid" \
-  --outputMaxZoom 15 \
-  -v
+ docker run -it -v $(pwd):/data wifidb/contour-generator \
+    pyramid \
+    --z 9 \
+    --x 272 \
+    --y 179 \
+    --demUrl "pmtiles://https://acalcutt.github.io/contour_generator/test_data/terrain-tiles.pmtiles" \
+    --sourceMaxZoom 12 \
+    --encoding mapbox \
+    --increment 0 \
+    --outputDir "/data/output_pyramid" \
+    --outputMaxZoom 15 \
+    -v
+  
+  # Test View Area #9/47.2542/11.5426
+```
 
-# Test View Area #9/47.2542/11.5426
 zoom function (using Docker w/pmtiles local source):
+```
 # View Help
-docker run --rm -v $(pwd):/data wifidb/contour-generator zoom --help
+ docker run -it -v $(pwd):/data wifidb/contour-generator zoom --help
 
-# Download example test data into your local directory
-wget https://github.com/acalcutt/contour_generator/releases/download/test_data/JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles
+# Downlad example test data into your local directory
+ wget https://github.com/acalcutt/contour_generator/releases/download/test_data/JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles
 
 # Example
-docker run --rm -v $(pwd):/data wifidb/contour-generator \
-  zoom \
-  --demUrl "pmtiles:///data/JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles" \
-  --outputDir "/data/output_zoom" \
-  --sourceMaxZoom 7 \
-  --encoding mapbox \
-  --outputMinZoom 5 \
-  --outputMaxZoom 7 \
-  --increment 100 \
-  --processes 8 \
-  --blankTileNoDataValue -32768 \
-  --blankTileSize 256 \
-  --blankTileFormat webp \
-  -v
+ docker run -it -v $(pwd):/data wifidb/contour-generator \
+    zoom \
+    --demUrl "pmtiles:///data/JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles" \
+    --outputDir "/data/output_zoom" \
+    --sourceMaxZoom 7 \
+    --encoding mapbox \
+    --outputMinZoom 5 \
+    --outputMaxZoom 7 \
+    --increment 100 \
+    --processes 8 \
+    --blankTileNoDataValue 0 \
+    --blankTileSize 512 \
+    --blankTileFormat webp \
+    -v
+  
+  # Test View Area #5/47.25/11.54
+  # Note: some "No tile returned for" messages are normal with this JAXA dataset since there are areas without tiles
+```
 
-# Test View Area #5/47.25/11.54
-# Note: some "No tile returned for" messages are normal with this JAXA dataset since there are areas without tiles
 bbox function (using Docker w/zxyPattern source):
+```
 # View Help
-docker run --rm -v $(pwd):/data wifidb/contour-generator bbox --help
+ docker run -it -v $(pwd):/data wifidb/contour-generator bbox --help
 
 # Example
-docker run --rm -v $(pwd):/data wifidb/contour-generator \
-  bbox \
-  --minx -73.51 \
-  --miny 41.23 \
-  --maxx -69.93 \
-  --maxy 42.88 \
-  --demUrl "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png" \
-  --sourceMaxZoom 15 \
-  --encoding terrarium \
-  --increment 50 \
-  --outputMinZoom 5 \
-  --outputMaxZoom 10 \
-  --outputDir "/data/output_bbox" \
-  --blankTileNoDataValue -32768 \
-  --blankTileSize 256 \
-  --blankTileFormat webp \
-  -v
+ docker run -it -v $(pwd):/data wifidb/contour-generator \
+    bbox \
+    --minx -73.51 \
+    --miny 41.23 \
+    --maxx -69.93 \
+    --maxy 42.88 \
+    --demUrl "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png" \
+    --sourceMaxZoom 15 \
+    --encoding terrarium \
+    --increment 50 \
+    --outputMinZoom 5 \
+    --outputMaxZoom 10 \
+    --outputDir "/data/output_bbox" \
+    -v
 
-# Test View Area #5/44.96/-73.35
+  # Test View Area #5/44.96/-73.35
+```
+
 Important Notes:
 
-The -v $(pwd):/data part of the docker run command maps your local working directory $(pwd) to /data inside the Docker container. Therefore, your DEM file must be located in the /data directory inside the Docker image, and the output directory must also be in the /data directory.
-All options, including the blank tile options, are now available for all functions.
-Install Locally on Linux
+The -v ```$(pwd):/data``` part of the docker run command maps your local working directory ```$(pwd)``` to ```/data``` inside the Docker container. Therefore, your DEM file must be located in the ```/data``` directory inside of the docker image, and the output directory must also be in the ```/data``` directory.
+
+# Install Locally on linux
+```
 git clone https://github.com/acalcutt/contour-generator.git
 cd contour-generator
 npm install
-Local Examples:
+```
+
+# Local Examples:
+
 pyramid function (Run Locally w/pmtiles https source):
+```
 # View Help
-npm run generate-contours -- pyramid --help
+ npm run generate-contours -- pyramid --help
 
 # Example
-npm run generate-contours -- pyramid \
+ npm run generate-contours -- pyramid \
   --z 9 \
   --x 272 \
   --y 179 \
@@ -154,21 +163,21 @@ npm run generate-contours -- pyramid \
   --increment 0 \
   --outputDir "./output_pyramid" \
   --outputMaxZoom 15 \
-  --blankTileNoDataValue 0 \
-  --blankTileSize 512 \
-  --blankTileFormat png \
   -v
 
-# Test View Area #9/47.2542/11.5426
+  #Test View Area #9/47.2542/11.5426
+```
+
 zoom function (Run Locally w/pmtiles local source):
+```
 # View Help
-npm run generate-contours -- zoom --help
+ npm run generate-contours -- zoom --help
 
-# Download the test data into your local directory
-wget https://github.com/acalcutt/contour_generator/releases/download/test_data/JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles
+# Downlad the test data into your local directory
+ wget https://github.com/acalcutt/contour_generator/releases/download/test_data/JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles
 
-# Example
-npm run generate-contours -- zoom \
+#Example
+ npm run generate-contours --  zoom \
   --demUrl "pmtiles://./JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles" \
   --outputDir "./output_zoom" \
   --sourceMaxZoom 7 \
@@ -177,19 +186,19 @@ npm run generate-contours -- zoom \
   --outputMaxZoom 7 \
   --increment 100 \
   --processes 8 \
-  --blankTileNoDataValue 0 \
-  --blankTileSize 512 \
-  --blankTileFormat webp \
   -v
 
-# Test View Area #5/47.25/11.54
-# Note: some "No tile returned for" messages are normal with this JAXA dataset since there are areas without tiles
+  # Test View Area #5/47.25/11.54 
+  # Note: some "No tile returned for" messages are normal with this JAXA dataset since there are areas without tiles
+```
+
 bbox function (Run Locally w/zxyPattern source):
+```
 # View Help
-npm run generate-contours -- bbox --help
+ npm run generate-contours -- bbox --help
 
 # Example
-npm run generate-contours -- bbox \
+ npm run generate-contours -- bbox \
   --minx -73.51 \
   --miny 41.23 \
   --maxx -69.93 \
@@ -201,12 +210,11 @@ npm run generate-contours -- bbox \
   --outputMinZoom 5 \
   --outputMaxZoom 10 \
   --outputDir "./output_bbox" \
-  --blankTileNoDataValue 0 \
-  --blankTileSize 512 \
-  --blankTileFormat png \
   -v
 
-# Test View Area #5/44.96/-73.35
-Test Data License Information
+  # Test View Area #5/44.96/-73.35
+```
+
+# Test Data License Information
 AWS mapzen terrarium tiles: https://registry.opendata.aws/terrain-tiles/
 JAXA AW3D30: https://earth.jaxa.jp/en/data/policy/
