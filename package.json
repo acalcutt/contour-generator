@@ -1,6 +1,6 @@
 {
   "name": "@acalcutt/contour-generator",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Locally generates contour vector tiles using maplibre-contour",
   "main": "dist/index.js",
   "bin": {
@@ -41,6 +41,7 @@
     "@mapbox/tilebelt": "^2.0.2",
     "commander": "^12.1.0",
     "maplibre-contour": "^0.1.0",
+    "patch-package": "8.0.0",
     "pmtiles": "^4.1.0",
     "sharp": "^0.33.5",
     "tsx": "^4.19.2"
