@@ -14,10 +14,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  release:
-    name: 'Test Docker Build'
-    runs-on: ubuntu-latest
+  ci:
+    name: Test and Build ${{ matrix.arch }} Image
+    runs-on: ${{ matrix.runs-on }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runs-on: ubuntu-22.04
+            arch: amd64
+          - runs-on: ubuntu-22.04-arm
+            arch: arm64
     steps:
+      - name: Get OS Architecture
+        run: uname -m
+
       - name: Check out repository ✨
         uses: actions/checkout@v4
 
@@ -27,11 +39,6 @@ jobs:
           currentVersion="$( node -e "console.log(require('./package.json').version)" )"
           echo "version=$currentVersion" >> "$GITHUB_OUTPUT"
           echo "currentVersion: $currentVersion"
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: 'arm64'
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -43,7 +50,7 @@ jobs:
           push: false
           load: true
           tags: contour-generator
-          platforms: linux/amd64
+          platforms: linux/${{ matrix.arch }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
