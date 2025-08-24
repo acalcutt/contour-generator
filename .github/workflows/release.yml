@@ -38,15 +38,19 @@ jobs:
       - name: Check if version is published
         id: check
         run: |
-          currentVersion="$( node -e "console.log(require('./package.json').version)" )"
-          isPublished="$( npm view @acalcutt/contour-generator versions --json | jq -c --arg cv "$currentVersion" 'any(. == $cv)' )"
-          echo "version=$currentVersion" >> "$GITHUB_OUTPUT"
+          PACKAGE_VERSION="$( node -e "console.log(require('./package.json').version)" )"
+          RELEASE_TYPE="$(node -e "const semver = require('semver'); const prerelease = semver.prerelease('$PACKAGE_VERSION'); console.log(prerelease ? 'prerelease' : 'regular')")"
+          isPublished="$( npm view @acalcutt/contour-generator versions --json | jq -c --arg cv "$PACKAGE_VERSION" 'any(. == $cv)' )"
+          echo "version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
           echo "published=$isPublished" >> "$GITHUB_OUTPUT"
-          echo "currentVersion: $currentVersion"
+          echo "release_type=$RELEASE_TYPE" >> "$GITHUB_OUTPUT"
+          echo "PACKAGE_VERSION: $PACKAGE_VERSION"
+          echo "RELEASE_TYPE: $RELEASE_TYPE"
           echo "isPublished: $isPublished"
     outputs:
       published: ${{ steps.check.outputs.published }}
       version: ${{ steps.check.outputs.version }}
+      release_type: ${{ steps.check.outputs.release_type }}
 
   # Build and push individual architecture images (with tests)
   build_docker_images:
@@ -77,14 +81,6 @@ jobs:
           username: ${{ github.event.inputs.docker_user }}
           password: ${{ github.event.inputs.docker_token }}
 
-      - name: Get release info
-        id: release_info
-        run: |
-          PACKAGE_VERSION="${{ needs.release-check.outputs.version }}"
-          RELEASE_TYPE="$(node -e "const semver = require('semver'); const prerelease = semver.prerelease('$PACKAGE_VERSION'); console.log(prerelease ? 'prerelease' : 'regular')")"
-          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
-          echo "RELEASE_TYPE=$RELEASE_TYPE" >> "$GITHUB_OUTPUT"
-
       # Build and Push Main Image
       - name: Build and Push Main ${{ matrix.arch }} Image
         uses: docker/build-push-action@v6
@@ -93,7 +89,7 @@ jobs:
           push: true
           platforms: linux/${{ matrix.arch }}
           tags: |
-            ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.release_info.outputs.PACKAGE_VERSION }}-${{ matrix.arch }}
+            ${{ env.DOCKER_IMAGE_NAME }}:v${{ needs.release-check.outputs.version }}-${{ matrix.arch }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -121,8 +117,7 @@ jobs:
       - name: Get release type
         id: prepare_release
         run: |
-          RELEASE_TYPE="$(node -e "console.log(require('semver').prerelease('${{ needs.release-check.outputs.version }}') ? 'prerelease' : 'regular')")"
-          if [[ $RELEASE_TYPE == 'regular' ]]; then
+          if [[ ${{ needs.release-check.outputs.release_type }} == 'regular' ]]; then
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
             echo "tag=latest" >> "$GITHUB_OUTPUT"
           else
