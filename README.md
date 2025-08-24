@@ -10,7 +10,7 @@ Generates contour tiles based on specified function and parameters.
 
 Docker Usage: `docker run --rm -v $(pwd):/data wifidb/contour-generator <function> [options]`  
 Local Usage: `node . <function> [options]`
-NPM Globally Installed: `contour-generated <function> [options]`
+NPM Globally Installed: `contour-generator <function> [options]`
 
 ## Functions:
 
