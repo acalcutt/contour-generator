@@ -35,6 +35,9 @@ jobs:
           check-latest: true
           cache: 'npm'
 
+      - name: Install NPM dependencies 🚀
+        run: npm ci
+
       - name: Check if version is published
         id: check
         run: |
