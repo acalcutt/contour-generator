@@ -1,4 +1,5 @@
-//src\generate-contour-tile-pyramid.ts
+#!/usr/bin/env node
+
 import { Command } from "commander";
 import { writeFileSync, mkdir, existsSync } from "fs";
 import mlcontour from "maplibre-contour";

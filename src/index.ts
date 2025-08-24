@@ -1,4 +1,4 @@
-// src\index.ts
+#!/usr/bin/env node
 
 import { Command } from "commander";
 import { spawn } from "child_process";
