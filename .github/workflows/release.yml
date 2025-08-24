@@ -1,4 +1,4 @@
-name: 'Build,Publish Docker'
+name: 'Build,Publish Docker and NPM'
 
 on:
   workflow_dispatch:
@@ -9,43 +9,169 @@ on:
       docker_token:
         description: 'Docker Token'
         required: true
+      npm_token:
+        description: 'NPM Token'
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  DOCKER_IMAGE_NAME: wifidb/contour-generator
 
 jobs:
-  release:
-    name: 'Build, Test, Publish'
+  release-check:
+    name: Check if version is published
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     steps:
-      - name: Check out repository ✨
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Get Version from package.json
-        id: version
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: 'package.json'
+          check-latest: true
+          cache: 'npm'
+
+      - name: Check if version is published
+        id: check
         run: |
           currentVersion="$( node -e "console.log(require('./package.json').version)" )"
+          isPublished="$( npm view @acalcutt/contour-generator versions --json | jq -c --arg cv "$currentVersion" 'any(. == $cv)' )"
           echo "version=$currentVersion" >> "$GITHUB_OUTPUT"
+          echo "published=$isPublished" >> "$GITHUB_OUTPUT"
           echo "currentVersion: $currentVersion"
+          echo "isPublished: $isPublished"
+    outputs:
+      published: ${{ steps.check.outputs.published }}
+      version: ${{ steps.check.outputs.version }}
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: 'arm64'
+  # Build and push individual architecture images (with tests)
+  build_docker_images:
+    name: Build Docker ${{ matrix.arch }} Image
+    runs-on: ${{ matrix.runs-on }}
+    needs: release-check
+    if: ${{ needs.release-check.outputs.published == 'false' }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runs-on: ubuntu-24.04
+            arch: amd64
+          - runs-on: ubuntu-24.04-arm
+            arch: arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Login to DockerHub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ github.event.inputs.docker_user }}
           password: ${{ github.event.inputs.docker_token }}
 
-      - name: Build and publish Full Version to Docker Hub
+      - name: Get release info
+        id: release_info
+        run: |
+          PACKAGE_VERSION="${{ needs.release-check.outputs.version }}"
+          RELEASE_TYPE="$(node -e "const semver = require('semver'); const prerelease = semver.prerelease('$PACKAGE_VERSION'); console.log(prerelease ? 'prerelease' : 'regular')")"
+          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "RELEASE_TYPE=$RELEASE_TYPE" >> "$GITHUB_OUTPUT"
+
+      # Build and Push Main Image
+      - name: Build and Push Main ${{ matrix.arch }} Image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: wifidb/contour-generator:latest, wifidb/contour-generator:v${{ steps.version.outputs.version }}
-          platforms: linux/arm64,linux/amd64
-          # experimental: https://github.com/docker/build-push-action/blob/master/docs/advanced/cache.md#cache-backend-api
+          platforms: linux/${{ matrix.arch }}
+          tags: |
+            ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.release_info.outputs.PACKAGE_VERSION }}-${{ matrix.arch }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Create manifests, publish NPM, and create GitHub release
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [release-check, build_docker_images]
+    if: ${{ needs.release-check.outputs.published == 'false' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup node env 📦
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: 'package.json'
+          check-latest: true
+          cache: 'npm'
+
+      - name: Install NPM dependencies 🚀
+        run: npm ci
+
+      - name: Get release type
+        id: prepare_release
+        run: |
+          RELEASE_TYPE="$(node -e "console.log(require('semver').prerelease('${{ needs.release-check.outputs.version }}') ? 'prerelease' : 'regular')")"
+          if [[ $RELEASE_TYPE == 'regular' ]]; then
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "tag=next" >> "$GITHUB_OUTPUT"
+          fi
+
+      # NPM Publishing
+      - name: Publish to NPM
+        run: |
+          npm config set //registry.npmjs.org/:_authToken ${NPM_TOKEN}
+          npm publish --access public --tag ${{ steps.prepare_release.outputs.tag }}
+        env:
+          NPM_TOKEN: ${{ github.event.inputs.npm_token }}
+
+      # Docker Manifest Creation
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ github.event.inputs.docker_user }}
+          password: ${{ github.event.inputs.docker_token }}
+
+      - name: Create and push Main Multi-Arch Manifest
+        run: |
+          PACKAGE_VERSION="${{ needs.release-check.outputs.version }}"
+          
+          docker buildx imagetools create \
+            --tag "${{ env.DOCKER_IMAGE_NAME }}:${{ steps.prepare_release.outputs.tag }}" \
+            --tag "${{ env.DOCKER_IMAGE_NAME }}:v${PACKAGE_VERSION}" \
+            "${{ env.DOCKER_IMAGE_NAME }}:v${PACKAGE_VERSION}-amd64" \
+            "${{ env.DOCKER_IMAGE_NAME }}:v${PACKAGE_VERSION}-arm64"
+
+      # GitHub Release
+      - name: Extract changelog for version
+        run: |
+          awk '/^##/ { p = 0 }; p == 1 { print }; $0 == "## ${{ needs.release-check.outputs.version }}" { p = 1 };' CHANGELOG.md > changelog_for_version.md
+          cat changelog_for_version.md
+
+      - name: Publish to GitHub Release
+        uses: ncipollo/release-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag: v${{ needs.release-check.outputs.version }}
+          name: v${{ needs.release-check.outputs.version }}
+          bodyFile: changelog_for_version.md
+          allowUpdates: true
+          draft: false
+          prerelease: ${{ steps.prepare_release.outputs.prerelease }}

@@ -1,0 +1,12 @@
+diff --git a/node_modules/maplibre-contour/package.json b/node_modules/maplibre-contour/package.json
+index 1234567..abcdefg 100644
+--- a/node_modules/maplibre-contour/package.json
++++ b/node_modules/maplibre-contour/package.json
+@@ -7,6 +7,7 @@
+   "module": "dist/index.mjs",
+   "types": "dist/index.d.ts",
+   "exports": {
++    "default": "./dist/index.mjs",
+     "module": "./dist/index.mjs",
+     "require": "./dist/index.cjs",
+     "types": "./dist/index.d.ts",

@@ -1,0 +1,51 @@
+{
+  "compilerOptions": {
+    // Basic settings
+    "target": "ES2020",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+
+    // Strictness and Error Checking
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictPropertyInitialization": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+
+    // Output settings
+    "outDir": "./dist",
+    "rootDir": "./src",
+
+    // Source Maps and Debugging
+    "sourceMap": true,
+    "inlineSources": true,
+
+    // Interop and Compatibility
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true, // Can be useful, but might hide other issues if problems exist in types
+
+    // Other useful options
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "useDefineForClassFields": true,
+
+    // --- Corrected Module Handling ---
+    "verbatimModuleSyntax": true,
+
+    // THIS IS THE KEY CHANGE: Enable respecting package.json exports
+    "resolvePackageJsonExports": true
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/types/**/*.d.ts" // Ensure your custom types are included
+  ],
+  "exclude": [
+    "node_modules",
+    "dist" // Exclude the output directory
+  ]
+}
