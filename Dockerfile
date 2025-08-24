@@ -1,32 +1,25 @@
 # Use an official Node.js runtime as a parent image
-FROM node:22-slim
+FROM node:22-slim AS builder
 
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy package files first for better caching
-COPY package*.json ./
-COPY tsconfig.json ./
+# Copy the application files to the container
+COPY . .
 
 # Install dependencies
 RUN npm ci
 
-# Copy source code
-COPY src/ ./src/
-COPY patches/ ./patches/ 
+# Create a new stage for the final image
+FROM node:22-slim
 
-# Build the TypeScript code
-RUN npm run build
-
-# Create folder for data mapping
+# Create folder for data mapping and set ownership (as root)
 RUN mkdir -p /data
 VOLUME /data
 
-# Make the built files executable
-RUN chmod +x dist/index.js dist/generate-contour-tile-pyramid.js
+# Copy all files from the builder stage
+COPY --from=builder /app /app
+WORKDIR /app
 
-# Install the package globally to make binaries available
-RUN npm install -g .
-
-# Set entrypoint to the main binary
-ENTRYPOINT ["contour-generator"]
+# Entrypoint to allow running commands
+ENTRYPOINT ["node", "."]
