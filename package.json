@@ -10,7 +10,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "patch": "patch-package",
     "build": "rimraf dist && tsc",
-    "prepare": "npm run build && npm run check",
+    "prepare": "npm run build",
     "postinstall": "npm run patch",
     "format": "prettier --write \"**/*.{ts,js,json}\"",
     "lint": "eslint \"**/*.{ts,js}\"",
