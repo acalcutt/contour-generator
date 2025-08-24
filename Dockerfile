@@ -7,13 +7,11 @@ WORKDIR /app
 # Copy package files first for better caching
 COPY package*.json ./
 COPY tsconfig.json ./
+COPY src/ ./src/
+COPY patches/ ./patches/ 
 
 # Install dependencies
 RUN npm ci
-
-# Copy source code
-COPY src/ ./src/
-COPY patches/ ./patches/ 
 
 # Build the TypeScript code
 RUN npm run build
