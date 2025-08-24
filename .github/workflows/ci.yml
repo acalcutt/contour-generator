@@ -22,9 +22,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runs-on: ubuntu-22.04
+          - runs-on: ubuntu-latest
             arch: amd64
-          - runs-on: ubuntu-22.04-arm
+          - runs-on: ubuntu-latest-arm
             arch: arm64
     steps:
       - name: Get OS Architecture
