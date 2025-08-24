@@ -17,7 +17,7 @@ permissions:
   contents: write
 
 env:
-  DOCKER_IMAGE_NAME: acalcutt/contour-generator
+  DOCKER_IMAGE_NAME: wifidb/contour-generator
 
 jobs:
   release-check:
