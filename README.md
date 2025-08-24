@@ -9,7 +9,8 @@ This script outputs tile files in the `<outputDir>/z/x/y.pbf` format and generat
 Generates contour tiles based on specified function and parameters.
 
 Docker Usage: `docker run --rm -v $(pwd):/data wifidb/contour-generator <function> [options]`  
-Local Usage: `npm run generate-contours -- <function> [options]`
+Local Usage: `node . <function> [options]`
+NPM Globally Installed: `contour-generated <function> [options]`
 
 ## Functions:
 
@@ -138,7 +139,7 @@ Important Notes:
 
 The -v ```$(pwd):/data``` part of the docker run command maps your local working directory ```$(pwd)``` to ```/data``` inside the Docker container. Therefore, your DEM file must be located in the ```/data``` directory inside of the docker image, and the output directory must also be in the ```/data``` directory.
 
-# Install Locally on linux
+# Install Locally from git
 ```
 git clone https://github.com/acalcutt/contour-generator.git
 cd contour-generator
@@ -150,10 +151,10 @@ npm install
 pyramid function (Run Locally w/pmtiles https source):
 ```
 # View Help
- npm run generate-contours -- pyramid --help
+ node . pyramid --help
 
 # Example
- npm run generate-contours -- pyramid \
+ node . pyramid \
   --z 9 \
   --x 272 \
   --y 179 \
@@ -171,13 +172,13 @@ pyramid function (Run Locally w/pmtiles https source):
 zoom function (Run Locally w/pmtiles local source):
 ```
 # View Help
- npm run generate-contours -- zoom --help
+ node . zoom --help
 
 # Downlad the test data into your local directory
  wget https://github.com/acalcutt/contour_generator/releases/download/test_data/JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles
 
 #Example
- npm run generate-contours --  zoom \
+ node .  zoom \
   --demUrl "pmtiles://./JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles" \
   --outputDir "./output_zoom" \
   --sourceMaxZoom 7 \
@@ -195,10 +196,10 @@ zoom function (Run Locally w/pmtiles local source):
 bbox function (Run Locally w/zxyPattern source):
 ```
 # View Help
- npm run generate-contours -- bbox --help
+ node . bbox --help
 
 # Example
- npm run generate-contours -- bbox \
+ node . bbox \
   --minx -73.51 \
   --miny 41.23 \
   --maxx -69.93 \
