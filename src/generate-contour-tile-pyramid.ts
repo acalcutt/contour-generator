@@ -1,19 +1,28 @@
+//src\generate-contour-tile-pyramid.ts
 import { Command } from "commander";
 import { writeFileSync, mkdir, existsSync } from "fs";
-import { default as mlcontour } from "../node_modules/maplibre-contour/dist/index.mjs";
+import mlcontour from "maplibre-contour";
 import {
   extractZXYFromUrlTrim,
   GetImageData,
   getOptionsForZoom,
   createBlankTileImage,
-} from "./mlcontour-adapter";
-import { getPMtilesTile, openPMtiles, pmtilesTester } from "./pmtiles-adapter";
+} from "./mlcontour-adapter.js";
+import {
+  getPMtilesTile,
+  openPMtiles,
+  pmtilesTester,
+} from "./pmtiles-adapter.js";
 // Import MBTiles adapter functions, tester, AND the metadata structure from openMBTiles
-import { openMBTiles, getMBTilesTile, mbtilesTester } from "./mbtiles-adapter";
+import {
+  openMBTiles,
+  getMBTilesTile,
+  mbtilesTester,
+} from "./mbtiles-adapter.js";
 
 import { getChildren } from "@mapbox/tilebelt";
 import path from "path";
-import type { Encoding } from "../node_modules/maplibre-contour/dist/types";
+import type { Encoding } from "../node_modules/maplibre-contour/dist/types.d.ts";
 import { type PMTiles } from "pmtiles";
 
 type Tile = [number, number, number];
@@ -202,7 +211,9 @@ const pmtilesFetcher: TileFetcher = async (
   }
 
   if (verbose) {
-    console.log(`[Fetcher] Fetching PMTiles: ${url} for ZXY: ${zxy.z}-${zxy.x}-${zxy.y}`);
+    console.log(
+      `[Fetcher] Fetching PMTiles: ${url} for ZXY: ${zxy.z}-${zxy.x}-${zxy.y}`,
+    );
   }
 
   const { data: zxyTileData, mimeType: pmtilesMimeType } = await getPMtilesTile(
@@ -257,7 +268,9 @@ const mbtilesFetcher: TileFetcher = async (
   }
 
   if (verbose) {
-    console.log(`[Fetcher] Fetching MBTiles: ${url} for ZXY: ${zxy.z}-${zxy.x}-${zxy.y}`);
+    console.log(
+      `[Fetcher] Fetching MBTiles: ${url} for ZXY: ${zxy.z}-${zxy.x}-${zxy.y}`,
+    );
   }
 
   try {
@@ -497,7 +510,9 @@ if (!existsSync(outputDir)) {
   }
   mkdir(outputDir, { recursive: true }, (err) => {
     if (err) {
-      console.error(`Failed to create output directory ${outputDir}: ${err.message}`);
+      console.error(
+        `Failed to create output directory ${outputDir}: ${err.message}`,
+      );
       process.exit(1);
     }
   });

@@ -2,15 +2,23 @@
   "name": "contour-generator",
   "version": "1.1.0",
   "description": "Locally generates contour vector tiles using maplibre-contour",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
+  "bin": {
+    "contour-generator": "dist/index.js"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "patch": "patch-package",
+    "build": "rimraf dist && tsc",
+    "prepare": "npm run build && npm run check",
+    "postinstall": "npm run patch",
     "format": "prettier --write \"**/*.{ts,js,json}\"",
     "lint": "eslint \"**/*.{ts,js}\"",
-    "check": "npm run format && npm run lint",
-    "generate-contour-tile-pyramid": "tsx src/generate-contour-tile-pyramid.ts",
-    "generate-contours": "tsx src/index.ts"
+    "check": "npm run format && npm run lint"
   },
+  "files": [
+    "dist/"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/acalcutt/contour_generator.git"
@@ -41,7 +49,9 @@
     "@types/node": "^22.10.2",
     "eslint": "^9.17.0",
     "eslint-config-prettier": "^9.1.0",
+    "patch-package": "^8.0.0",
     "prettier": "^3.4.2",
+    "rimraf": "^6.0.1",
     "shellcheck": "^3.0.0",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.19.1"

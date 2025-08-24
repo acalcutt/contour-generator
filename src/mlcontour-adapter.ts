@@ -1,10 +1,10 @@
 import sharp from "sharp";
-import { default as mlcontour } from "../node_modules/maplibre-contour/dist/index.mjs";
+import mlcontour from "maplibre-contour";
 import type {
   DemTile,
   Encoding,
   GlobalContourTileOptions,
-} from "../node_modules/maplibre-contour/dist/types";
+} from "../node_modules/maplibre-contour/dist/types.d.ts";
 
 // Constants for Encoding
 const TERRARIUM_MULT = 256;

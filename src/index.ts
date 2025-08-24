@@ -1,8 +1,14 @@
+// src\index.ts
+
 import { Command } from "commander";
 import { spawn } from "child_process";
 import path from "path";
 import { writeFileSync, existsSync, mkdirSync } from "fs";
-import { bboxToTiles } from "./bbox_to_tiles";
+import { fileURLToPath } from "url";
+import { bboxToTiles } from "./bbox_to_tiles.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // --- Types ---
 type BaseOptions = {
@@ -106,10 +112,17 @@ async function processTile(options: PyramidOptions): Promise<void> {
   validateEncoding(options.encoding);
 
   return new Promise((resolve, reject) => {
+    // Path to the generate-contour-tile-pyramid.js script in the same directory
+    const scriptPath = path.join(__dirname, "generate-contour-tile-pyramid.js");
+
+    // Check if the script exists
+    if (!existsSync(scriptPath)) {
+      reject(new Error(`Script not found at: ${scriptPath}`));
+      return;
+    }
+
     const commandArgs = [
-      "run",
-      "generate-contour-tile-pyramid",
-      "--", // Separator for npm run arguments
+      scriptPath,
       "--x",
       options.x.toString(),
       "--y",
@@ -141,9 +154,9 @@ async function processTile(options: PyramidOptions): Promise<void> {
       commandArgs.push("--verbose"); // Pass the verbose flag to the child
     }
 
-    const workerProcess = spawn("npm", commandArgs, {
+    const workerProcess = spawn("node", commandArgs, {
       stdio: ["ignore", "pipe", "pipe"], // Capture stdout and stderr
-      shell: false, // Use false for better security and performance
+      shell: true, // Use false for better security and performance
     });
 
     const processPrefix = `[Tile ${options.z}-${options.x}-${options.y}] `;
