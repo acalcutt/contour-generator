@@ -22,4 +22,4 @@ COPY --from=builder /app /app
 WORKDIR /app
 
 # Entrypoint to allow running commands
-ENTRYPOINT ["node", ".", "--"]
+ENTRYPOINT ["node", "."]
