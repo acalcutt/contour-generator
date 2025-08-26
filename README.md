@@ -74,7 +74,7 @@ The tool supports various elevation data sources:
 - **Tile server**: `https://example.com/{z}/{x}/{y}.png`
 
 ### Encodings
-- **`terrarium`**: RGB encoding where elevation = (R × 256² + G × 256 + B) / 256 - 32768 (AWS format)
+- **`terrarium`**: RGB encoding where elevation = (R × 256² + G × 256 + B) / 256 - 32768
 - **`mapbox`**: RGB encoding where elevation = -10000 + ((R × 256² + G × 256 + B) × 0.1)
 
 ## Usage Examples
