@@ -1,8 +1,8 @@
 # Contour Generator
 
-Generate contour lines from terrain elevation data and output them as Mapbox Vector Tiles (MVT). This tool converts Digital Elevation Model (DEM) raster data into vector contour lines that can be used in web maps, GIS applications, and other mapping tools.
+Generate contour lines from terrain elevation data and output them as Mapbox Vector Tiles (MVT). This tool converts terrain raster-dem data into vector contour lines that can be used in web maps, GIS applications, and other mapping tools.
 
-Built on [maplibre-contour](https://github.com/onthegomap/maplibre-contour) for reliable contour generation, it outputs standard MVT tiles compatible with MapLibre GL JS, Mapbox GL JS, and other vector tile consumers. The tool handles tile pyramids automatically, generating appropriate detail levels for each zoom with contour density optimized for web map performance.
+Built on [maplibre-contour](https://github.com/onthegomap/maplibre-contour) for contour generation, it outputs standard MVT tiles compatible with MapLibre GL JS, Mapbox GL JS, and other vector tile consumers. The tool handles tile pyramids automatically, generating appropriate detail levels for each zoom with contour density optimized for web map performance.
 
 ![Example Output](example-contours.png) <!-- Add actual image -->
 
@@ -195,21 +195,42 @@ mb-util --image_format=pbf ./output contours.mbtiles
 ### Viewing in a web map
 ```javascript
 // Add to MapLibre GL JS
-map.addSource('contours', {
+map.addSource('contour-source', {
     type: 'vector',
     tiles: ['http://localhost:3000/{z}/{x}/{y}.pbf'],
     maxzoom: 15
 });
 
+// Add contour lines with variable width based on elevation level
 map.addLayer({
-    id: 'contour-lines',
-    type: 'line',
-    source: 'contours',
-    'source-layer': 'contours',
+    id: "contour-lines",
+    type: "line",
+    source: "contour-source",
+    "source-layer": "contours",
     paint: {
-        'line-color': '#8B4513',
-        'line-width': 1
-    }
+        "line-color": "rgba(0,0,0, 50%)",
+        // level = highest index in thresholds array the elevation is a multiple of
+        "line-width": ["match", ["get", "level"], 1, 1, 0.5],
+    },
+});
+
+// Add elevation labels on major contour lines
+map.addLayer({
+    id: "contour-labels",
+    type: "symbol",
+    source: "contour-source",
+    "source-layer": "contours",
+    filter: [">", ["get", "level"], 0],
+    layout: {
+        "symbol-placement": "line",
+        "text-size": 10,
+        "text-field": ["concat", ["number-format", ["get", "ele"], {}], "'"],
+        "text-font": ["Noto Sans Bold"],
+    },
+    paint: {
+        "text-halo-color": "white",
+        "text-halo-width": 1,
+    },
 });
 ```
 
@@ -234,10 +255,6 @@ map.addLayer({
 ## Troubleshooting
 
 ### Common Issues
-
-**"No tile returned" messages**
-- Normal for sparse datasets (like JAXA over oceans)
-- Check if your coordinates are within the DEM coverage area
 
 **Out of memory errors**
 - Reduce `--processes` count
@@ -270,4 +287,3 @@ contour-generator bbox --help
 ### Test Data
 - **AWS Terrain Tiles**: [terrain-tiles on AWS Open Data](https://registry.opendata.aws/terrain-tiles/)
 - **JAXA AW3D30**: [JAXA Earth Data Policy](https://earth.jaxa.jp/en/data/policy/)
-
