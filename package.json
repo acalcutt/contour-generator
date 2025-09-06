@@ -1,19 +1,30 @@
 {
   "name": "contour-generator",
-  "version": "1.1.0",
+  "version": "2.0.7",
   "description": "Locally generates contour vector tiles using maplibre-contour",
-  "main": "src/index.ts",
+  "main": "./dist/index.js",
+  "bin": {
+    "contour-generator": "./dist/index.js"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "patch": "patch-package",
+    "build": "rimraf dist && tsc",
+    "prepare": "npm run build",
+    "postinstall": "npm run patch",
     "format": "prettier --write \"**/*.{ts,js,json}\"",
     "lint": "eslint \"**/*.{ts,js}\"",
     "check": "npm run format && npm run lint",
     "generate-contour-tile-pyramid": "tsx src/generate-contour-tile-pyramid.ts",
     "generate-contours": "tsx src/index.ts"
   },
+  "files": [
+    "dist/",
+    "patches/"
+  ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/acalcutt/contour_generator.git"
+    "url": "git+https://github.com/acalcutt/contour-generator.git"
   },
   "keywords": [
     "maplibre",
@@ -25,15 +36,17 @@
   "license": "BSD-3-Clause",
   "type": "module",
   "bugs": {
-    "url": "https://github.com/acalcutt/contour_generator/issues"
+    "url": "https://github.com/acalcutt/contour-generator/issues"
   },
-  "homepage": "https://github.com/acalcutt/contour_generator#readme",
+  "homepage": "https://github.com/acalcutt/contour-generator#readme",
   "dependencies": {
     "@mapbox/mbtiles": "^0.12.1",
     "@mapbox/tilebelt": "^2.0.2",
     "commander": "^12.1.0",
     "maplibre-contour": "^0.1.0",
+    "patch-package": "8.0.0",
     "pmtiles": "^4.1.0",
+    "semver": "^7.7.2",
     "sharp": "^0.33.5",
     "tsx": "^4.19.2"
   },
@@ -41,7 +54,9 @@
     "@types/node": "^22.10.2",
     "eslint": "^9.17.0",
     "eslint-config-prettier": "^9.1.0",
+    "patch-package": "^8.0.0",
     "prettier": "^3.4.2",
+    "rimraf": "^6.0.1",
     "shellcheck": "^3.0.0",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.19.1"

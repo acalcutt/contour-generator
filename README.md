@@ -1,220 +1,290 @@
 # Contour Generator
 
-Generates contour tiles in Mapbox Vector Tile (MVT) format from terrain raster-dem data using [maplibre-contour](https://github.com/onthegomap/maplibre-contour). It allows `maplibre-contour` to work with PMTiles (local or HTTP) when the `demUrl` is prefixed with `pmtiles://` and outputs to local MVT tiles.
+Generate contour lines from terrain elevation data and output them as Mapbox Vector Tiles (MVT). This tool converts terrain raster-dem data into vector contour lines that can be used in web maps, GIS applications, and other mapping tools.
 
-This script outputs tile files in the `<outputDir>/z/x/y.pbf` format and generates a `<outputDir>/metadata.json` file. These files can be imported using [mbutil](https://github.com/mapbox/mbutil). For example, to import the tiles into an mbtiles file using mbutil, the syntax would be: `mb-util --image_format=pbf <outputDir> output.mbtiles`.
+Built on [maplibre-contour](https://github.com/onthegomap/maplibre-contour) for contour generation, it outputs standard MVT tiles compatible with MapLibre GL JS, Mapbox GL JS, and other vector tile consumers. The tool handles tile pyramids automatically, generating appropriate detail levels for each zoom with contour density optimized for web map performance.
 
-# Script Parameters
+![Example Output](example-contours.png) <!-- Add actual image -->
 
-Generates contour tiles based on specified function and parameters.
+## What are contour lines?
+Contour lines connect points of equal elevation on a map, helping visualize terrain shape and steepness. They're essential for topographic maps, hiking applications, and terrain analysis.
 
-Docker Usage: `docker run --rm -v $(pwd):/data wifidb/contour-generator <function> [options]`  
-Local Usage: `npm run generate-contours -- <function> [options]`
+## Quick Start
 
-## Functions:
-
-*   `pyramid`: Generates contours for a parent tile and all child tiles up to a specified max zoom level.
-*   `zoom`: Generates a list of parent tiles at a specified zoom level, then runs pyramid on each of them in parallel.
-*   `bbox`: Generates a list of parent tiles that cover a bounding box, then runs pyramid on each of them in parallel.
-
-## General Options
-
-*   `--demUrl <string>`: The URL of the DEM source (e.g., `pmtiles://<http or local file path>` or a tile URL pattern like `https://<zxyPattern>`).
-*   `--encoding <string>`: The encoding of the source DEM tiles (e.g., `'terrarium'`, `'mapbox'`). (default: `mapbox`)
-*   `--sourceMaxZoom <number>`: The maximum zoom level of the source DEM. (default: `8`)
-*   `--increment <number>`: The contour increment value to extract. Use `0` for default thresholds.
-*   `--outputMaxZoom <number>`: The maximum zoom level of the output tile pyramid. (default: `8`)
-*   `--outputDir <string>`: The output directory where tiles will be stored. (default: `./output`)
-*   `--processes <number>`: The number of parallel processes to use. (default: `8`)
-*   `--blankTileNoDataValue <number>`: The elevation value to use for blank tiles when a DEM tile is missing. (default: `0`)
-*   `--blankTileSize <number>`: The pixel dimension of the tiles (e.g., 256 or 512). (default: `512`)
-*   `--blankTileFormat <string>`: The image format for generated blank tiles (`'png'`, `'webp'`, or `'jpeg'`). This is used as a fallback if the source format cannot be determined. (default: `png`)
-*   `-v, --verbose`: Enable verbose output.
-*   `-h, --help`: Show this usage statement.
-
-## Function-Specific Options
-
-### For `pyramid`:
-
-*   `--x <number>`: The X coordinate of the parent tile. (Required)
-*   `--y <number>`: The Y coordinate of the parent tile. (Required)
-*   `--z <number>`: The Z coordinate of the parent tile. (Required)
-
-### For `zoom`:
-
-*   `--outputMinZoom <number>`: The minimum zoom level of the output tile pyramid. (default: `5`)
-
-### For `bbox`:
-
-*   `--minx <number>`: The minimum X coordinate of the bounding box. (Required)
-*   `--miny <number>`: The minimum Y coordinate of the bounding box. (Required)
-*   `--maxx <number>`: The maximum X coordinate of the bounding box. (Required)
-*   `--maxy <number>`: The maximum Y coordinate of the bounding box. (Required)
-*   `--outputMinZoom <number>`: The minimum zoom level of the output tile pyramid. (default: `5`)
-
-# Use with Docker
-
-This image is published to Docker Hub as [wifidb/contour-generator](https://hub.docker.com/r/wifidb/contour-generator).
-
-The docker image wifidb/contour-generator can be used for generating tiles in different ways.
-
-## Docker Examples:
-
-pyramid function (using Docker w/pmtiles https source):
-```
-# View Help
- docker run -it -v $(pwd):/data wifidb/contour-generator pyramid --help
-
-# Example
- docker run -it -v $(pwd):/data wifidb/contour-generator \
-    pyramid \
-    --z 9 \
-    --x 272 \
-    --y 179 \
-    --demUrl "pmtiles://https://acalcutt.github.io/contour_generator/test_data/terrain-tiles.pmtiles" \
-    --sourceMaxZoom 12 \
-    --encoding mapbox \
-    --increment 0 \
-    --outputDir "/data/output_pyramid" \
-    --outputMaxZoom 15 \
-    -v
-  
-  # Test View Area #9/47.2542/11.5426
+**Install globally via npm:**
+```bash
+npm install -g contour-generator
 ```
 
-zoom function (using Docker w/pmtiles local source):
-```
-# View Help
- docker run -it -v $(pwd):/data wifidb/contour-generator zoom --help
-
-# Downlad example test data into your local directory
- wget https://github.com/acalcutt/contour_generator/releases/download/test_data/JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles
-
-# Example
- docker run -it -v $(pwd):/data wifidb/contour-generator \
-    zoom \
-    --demUrl "pmtiles:///data/JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles" \
-    --outputDir "/data/output_zoom" \
-    --sourceMaxZoom 7 \
-    --encoding mapbox \
-    --outputMinZoom 5 \
-    --outputMaxZoom 7 \
-    --increment 100 \
-    --processes 8 \
-    --blankTileNoDataValue 0 \
-    --blankTileSize 512 \
-    --blankTileFormat webp \
-    -v
-  
-  # Test View Area #5/47.25/11.54
-  # Note: some "No tile returned for" messages are normal with this JAXA dataset since there are areas without tiles
+**Generate your first contour map:**
+```bash
+contour-generator pyramid \
+  --z 9 --x 272 --y 179 \
+  --demUrl "pmtiles://https://acalcutt.github.io/contour_generator/test_data/terrain-tiles.pmtiles" \
+  --sourceMaxZoom 12 \
+  --outputMaxZoom 15 \
+  --outputDir "./my-contours"
 ```
 
-bbox function (using Docker w/zxyPattern source):
-```
-# View Help
- docker run -it -v $(pwd):/data wifidb/contour-generator bbox --help
+This creates contour lines for a small area in the Alps. Check the `./my-contours` directory for the generated tiles, then jump to [Using the Output](#using-the-output) to see how to view them.
 
-# Example
- docker run -it -v $(pwd):/data wifidb/contour-generator \
-    bbox \
-    --minx -73.51 \
-    --miny 41.23 \
-    --maxx -69.93 \
-    --maxy 42.88 \
-    --demUrl "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png" \
-    --sourceMaxZoom 15 \
-    --encoding terrarium \
-    --increment 50 \
-    --outputMinZoom 5 \
-    --outputMaxZoom 10 \
-    --outputDir "/data/output_bbox" \
-    -v
+## Prerequisites
 
-  # Test View Area #5/44.96/-73.35
+- Node.js 16 or higher
+- At least 2GB free disk space for processing
+- Internet connection (for remote DEM sources)
+
+## Installation
+
+### Option 1: Global Installation (Recommended)
+```bash
+npm install -g contour-generator
+
+# Verify installation
+contour-generator --help
 ```
 
-Important Notes:
-
-The -v ```$(pwd):/data``` part of the docker run command maps your local working directory ```$(pwd)``` to ```/data``` inside the Docker container. Therefore, your DEM file must be located in the ```/data``` directory inside of the docker image, and the output directory must also be in the ```/data``` directory.
-
-# Install Locally on linux
-```
+### Option 2: Local Development
+```bash
 git clone https://github.com/acalcutt/contour-generator.git
 cd contour-generator
 npm install
+
+# Run with
+node . --help
 ```
 
-# Local Examples:
-
-pyramid function (Run Locally w/pmtiles https source):
+### Option 3: Docker
+```bash
+# No installation needed - runs in container
+docker run --rm wifidb/contour-generator --help
 ```
-# View Help
- npm run generate-contours -- pyramid --help
 
-# Example
- npm run generate-contours -- pyramid \
-  --z 9 \
-  --x 272 \
-  --y 179 \
+## Core Concepts
+
+### Generation Functions
+- **`pyramid`**: Generate contours for a single map tile and all its children
+- **`zoom`**: Process all tiles at a specific zoom level
+- **`bbox`**: Process all tiles within a geographic bounding box
+
+### DEM Sources
+The tool supports various elevation data sources:
+- **PMTiles**: `pmtiles:///path/to/file.pmtiles` (local) or `pmtiles://https://foo.lan/file.pmtiles` (HTTP)
+- **MBTiles**: `mbtiles:///path/to/file.mbtiles` (local only)
+- **Tile server**: `https://example.com/{z}/{x}/{y}.png`
+
+### Encodings
+- **`terrarium`**: RGB encoding where elevation = (R × 256² + G × 256 + B) / 256 - 32768
+- **`mapbox`**: RGB encoding where elevation = -10000 + ((R × 256² + G × 256 + B) × 0.1)
+
+## Usage Examples
+
+### Generate contours for a specific area (pyramid)
+
+```bash
+contour-generator pyramid \
+  --z 9 --x 272 --y 179 \
   --demUrl "pmtiles://https://acalcutt.github.io/contour_generator/test_data/terrain-tiles.pmtiles" \
   --sourceMaxZoom 12 \
   --encoding mapbox \
-  --increment 0 \
-  --outputDir "./output_pyramid" \
+  --increment 50 \
   --outputMaxZoom 15 \
-  -v
-
-  #Test View Area #9/47.2542/11.5426
+  --outputDir "./output"
 ```
+*Generates contours for tile 9/272/179 and all child tiles up to zoom 15, with 50m elevation intervals*
 
-zoom function (Run Locally w/pmtiles local source):
-```
-# View Help
- npm run generate-contours -- zoom --help
+### Process an entire zoom level
 
-# Downlad the test data into your local directory
- wget https://github.com/acalcutt/contour_generator/releases/download/test_data/JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles
-
-#Example
- npm run generate-contours --  zoom \
-  --demUrl "pmtiles://./JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles" \
-  --outputDir "./output_zoom" \
+```bash
+contour-generator zoom \
+  --demUrl "pmtiles://./elevation-data.pmtiles" \
   --sourceMaxZoom 7 \
-  --encoding mapbox \
   --outputMinZoom 5 \
   --outputMaxZoom 7 \
   --increment 100 \
-  --processes 8 \
-  -v
-
-  # Test View Area #5/47.25/11.54 
-  # Note: some "No tile returned for" messages are normal with this JAXA dataset since there are areas without tiles
+  --outputDir "./output"
 ```
+*Processes all tiles from zoom 5 to 7 with 100m contour intervals*
 
-bbox function (Run Locally w/zxyPattern source):
-```
-# View Help
- npm run generate-contours -- bbox --help
+### Process a geographic area (bbox)
 
-# Example
- npm run generate-contours -- bbox \
-  --minx -73.51 \
-  --miny 41.23 \
-  --maxx -69.93 \
-  --maxy 42.88 \
+```bash
+contour-generator bbox \
+  --minx -73.51 --miny 41.23 \
+  --maxx -69.93 --maxy 42.88 \
   --demUrl "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png" \
   --sourceMaxZoom 15 \
   --encoding terrarium \
   --increment 50 \
   --outputMinZoom 5 \
   --outputMaxZoom 10 \
-  --outputDir "./output_bbox" \
-  -v
+  --outputDir "./output"
+```
+*Generates contours for New England area with 50m intervals*
 
-  # Test View Area #5/44.96/-73.35
+### Docker Usage
+
+When using Docker, map your local directory to `/data` inside the container:
+
+```bash
+# Download test data
+wget https://github.com/acalcutt/contour_generator/releases/download/test_data/JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles
+
+# Run with Docker
+docker run --rm -v $(pwd):/data wifidb/contour-generator \
+  zoom \
+  --demUrl "pmtiles:///data/JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles" \
+  --outputDir "/data/output" \
+  --sourceMaxZoom 7 \
+  --outputMaxZoom 7 \
+  --increment 100
 ```
 
-# Test Data License Information
-AWS mapzen terrarium tiles: https://registry.opendata.aws/terrain-tiles/
-JAXA AW3D30: https://earth.jaxa.jp/en/data/policy/
+**Important**: All file paths in Docker must be under `/data/` since that's where your local directory is mounted.
+
+## Configuration Options
+
+### General Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `--demUrl` | *required* | DEM source URL or file path |
+| `--encoding` | `mapbox` | DEM encoding format (`mapbox` or `terrarium`) |
+| `--sourceMaxZoom` | `8` | Maximum zoom of source DEM tiles |
+| `--increment` | `0` | Contour interval in meters (0 = auto thresholds) |
+| `--outputMaxZoom` | `8` | Maximum zoom of output tiles |
+| `--outputDir` | `./output` | Directory for generated tiles |
+| `--processes` | `8` | Parallel processes (adjust for your CPU) |
+| `--verbose` | `false` | Enable detailed logging |
+
+### Function-specific Parameters
+
+**pyramid function:**
+- `--x`, `--y`, `--z`: Tile coordinates (required)
+
+**zoom function:**
+- `--outputMinZoom`: Starting zoom level (default: 5)
+
+**bbox function:**
+- `--minx`, `--miny`, `--maxx`, `--maxy`: Bounding box coordinates (required)
+- `--outputMinZoom`: Starting zoom level (default: 5)
+
+### Advanced Options
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `--blankTileNoDataValue` | `0` | Elevation for missing tiles |
+| `--blankTileSize` | `512` | Tile size in pixels |
+| `--blankTileFormat` | `png` | Format for generated blank tiles |
+
+## Using the Output
+
+The tool generates:
+- **Tile files**: `output/{z}/{x}/{y}.pbf` - Vector tiles containing contour lines
+- **Metadata**: `metadata.json` - Tile set information
+
+### Converting to MBTiles
+```bash
+# Install mbutil (Python package)
+pip install mbutil
+
+# Convert directory to MBTiles
+mb-util --image_format=pbf ./output contours.mbtiles
+```
+
+### Viewing in a web map
+```javascript
+// Add to MapLibre GL JS
+map.addSource('contour-source', {
+    type: 'vector',
+    tiles: ['http://localhost:3000/{z}/{x}/{y}.pbf'],
+    maxzoom: 15
+});
+
+// Add contour lines with variable width based on elevation level
+map.addLayer({
+    id: "contour-lines",
+    type: "line",
+    source: "contour-source",
+    "source-layer": "contours",
+    paint: {
+        "line-color": "rgba(0,0,0, 50%)",
+        // level = highest index in thresholds array the elevation is a multiple of
+        "line-width": ["match", ["get", "level"], 1, 1, 0.5],
+    },
+});
+
+// Add elevation labels on major contour lines
+map.addLayer({
+    id: "contour-labels",
+    type: "symbol",
+    source: "contour-source",
+    "source-layer": "contours",
+    filter: [">", ["get", "level"], 0],
+    layout: {
+        "symbol-placement": "line",
+        "text-size": 10,
+        "text-field": ["concat", ["number-format", ["get", "ele"], {}], "'"],
+        "text-font": ["Noto Sans Bold"],
+    },
+    paint: {
+        "text-halo-color": "white",
+        "text-halo-width": 1,
+    },
+});
+```
+
+## Performance Guidelines
+
+### Processing Time Estimates
+- **Single tile (pyramid)**: 10-60 seconds
+- **Full zoom level**: Minutes to hours depending on area
+- **Large bbox**: Can take several hours
+
+### System Requirements
+- **RAM**: 4GB minimum, 8GB+ recommended for large areas
+- **Storage**: ~1MB per tile generated
+- **CPU**: More processes = faster completion (try `--processes` = CPU cores)
+
+### Optimization Tips
+- Use local DEM files when possible (faster than HTTP)
+- Start with higher `--increment` values for faster processing
+- Test with small areas (`pyramid`) before large batch jobs
+- Monitor disk space - large bbox operations can generate many GB
+
+## Troubleshooting
+
+### Common Issues
+
+**Out of memory errors**
+- Reduce `--processes` count
+- Process smaller areas at a time
+- Increase system swap space
+
+**Permission errors (Docker)**
+- Ensure output directory is writable: `chmod 755 $(pwd)`
+- On Windows, use full path: `-v C:\path\to\data:/data`
+
+**Slow processing**
+- Use local files instead of HTTP sources
+- Reduce `--outputMaxZoom` for testing
+- Check internet connection for remote sources
+
+### Getting Help
+
+```bash
+# View general help
+contour-generator --help
+
+# Function-specific help
+contour-generator pyramid --help
+contour-generator zoom --help
+contour-generator bbox --help
+```
+
+## Data Sources & Licensing
+
+### Test Data
+- **AWS Terrain Tiles**: [terrain-tiles on AWS Open Data](https://registry.opendata.aws/terrain-tiles/)
+- **JAXA AW3D30**: [JAXA Earth Data Policy](https://earth.jaxa.jp/en/data/policy/)
+-
