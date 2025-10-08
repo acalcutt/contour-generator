@@ -23,6 +23,8 @@ type BaseOptions = {
   blankTileNoDataValue: number;
   blankTileSize: number;
   blankTileFormat: string;
+  useSparseMode: boolean;
+  sparseResamplingMethod: string;
 };
 
 type PyramidOptions = BaseOptions & {
@@ -148,6 +150,13 @@ async function processTile(options: PyramidOptions): Promise<void> {
       "--blankTileFormat",
       options.blankTileFormat,
     ];
+
+    // Add sparse mode options if enabled
+    if (options.useSparseMode) {
+      commandArgs.push("--useSparseMode");
+      commandArgs.push("--sparseResamplingMethod");
+      commandArgs.push(options.sparseResamplingMethod);
+    }
 
     // Pass the verbose flag down to the child process ONLY if the orchestrator is verbose
     if (options.verbose) {
@@ -445,6 +454,20 @@ async function main(): Promise<void> {
       description:
         "The image format for generated blank tiles ('png', 'webp', or 'jpeg').",
       defaultValue: "png",
+    },
+    {
+      type: "standard",
+      flags: "--useSparseMode",
+      description:
+        "Enable sparse tile mode: upscale and crop lower zoom tiles instead of generating blank tiles when DEM tiles are missing.",
+      defaultValue: false,
+    },
+    {
+      type: "standard",
+      flags: "--sparseResamplingMethod <string>",
+      description:
+        "The resampling method used for upscaling sparse tiles ('nearest', 'bilinear', or 'bicubic').",
+      defaultValue: "bicubic",
     },
     {
       type: "standard",
