@@ -10,3 +10,19 @@ index 1234567..abcdefg 100644
      "module": "./dist/index.mjs",
      "require": "./dist/index.cjs",
      "types": "./dist/index.d.ts",
+diff --git a/node_modules/maplibre-contour/index.mjs b/node_modules/maplibre-contour/index.mjs
+index 2345678..bcdefgh 100644
+--- a/node_modules/maplibre-contour/index.mjs
++++ b/node_modules/maplibre-contour/index.mjs
+@@ -1054,7 +1054,11 @@ function writeValue(value, pbf) {
+         pbf.writeStringField(1, value);
+     }
+     else if (typeof value === "boolean") {
+-        pbf.writeBooleanField(7, value);
++        // PATCH: Re-encoding boolean (tag 7) as a uint64_value (tag 5)
++        // with a value of 0 (false) or 1 (true). This avoids conflicts with
++        // strict MapLibre-Native decoders that may reject tag 7.
++        pbf.writeVarintField(5, value ? 1 : 0);
+     }
+     else if (typeof value === "number") {
+         if (value % 1 !== 0) {
