@@ -10,11 +10,11 @@ index 1234567..abcdefg 100644
      "module": "./dist/index.mjs",
      "require": "./dist/index.cjs",
      "types": "./dist/index.d.ts",
-diff --git a/node_modules/maplibre-contour/index.mjs b/node_modules/maplibre-contour/index.mjs
+diff --git a/node_modules/maplibre-contour/dist/index.mjs b/node_modules/maplibre-contour/dist/index.mjs
 index 2345678..bcdefgh 100644
---- a/node_modules/maplibre-contour/index.mjs
-+++ b/node_modules/maplibre-contour/index.mjs
-@@ -1054,7 +1054,11 @@ function writeValue(value, pbf) {
+--- a/node_modules/maplibre-contour/dist/index.mjs
++++ b/node_modules/maplibre-contour/dist/index.mjs
+@@ -1830,7 +1830,10 @@ function writeValue(value, pbf) {
          pbf.writeStringField(1, value);
      }
      else if (typeof value === "boolean") {
