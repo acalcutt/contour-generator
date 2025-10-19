@@ -10,3 +10,49 @@ index 1234567..abcdefg 100644
      "module": "./dist/index.mjs",
      "require": "./dist/index.cjs",
      "types": "./dist/index.d.ts",
+diff --git a/node_modules/maplibre-contour/dist/index.mjs b/node_modules/maplibre-contour/dist/index.mjs
+index 2345678..bcdefgh 100644
+--- a/node_modules/maplibre-contour/dist/index.mjs
++++ b/node_modules/maplibre-contour/dist/index.mjs
+@@ -2077,7 +2077,7 @@ class LocalDemManager {
+                 },
+             });
+             mark === null || mark === void 0 ? void 0 : mark();
+-            return { arrayBuffer: result.buffer };
++            return { arrayBuffer: result.slice().buffer };
+         }), parentAbortController);
+     }
+ }
+diff --git a/node_modules/maplibre-contour/dist/index.mjs b/node_modules/maplibre-contour/dist/index.mjs
+index 2345678..bcdefgh 100644
+--- a/node_modules/maplibre-contour/dist/index.mjs
++++ b/node_modules/maplibre-contour/dist/index.mjs
+@@ -1724,9 +1724,8 @@ function encodeVectorTile(tile) {
+ function writeLayer(layer, pbf) {
+     if (!pbf)
+         throw new Error("pbf undefined");
+-    pbf.writeVarintField(15, 2);
+-    pbf.writeStringField(1, layer.id || "");
+-    pbf.writeVarintField(5, layer.extent || 4096);
++    pbf.writeStringField(1, layer.id || ""); // name (required, field 1)
++    // Write all features (field 2)
+     const context = {
+         keys: [],
+         values: [],
+@@ -1737,12 +1736,16 @@ function writeLayer(layer, pbf) {
+         context.feature = feature;
+         pbf.writeMessage(2, writeFeature, context);
+     }
++    // Write all keys (field 3)
+     for (const key of context.keys) {
+         pbf.writeStringField(3, key);
+     }
++    // Write all values (field 4)
+     for (const value of context.values) {
+         pbf.writeMessage(4, writeValue, value);
+     }
++    pbf.writeVarintField(5, layer.extent || 4096); // extent (field 5)
++    pbf.writeVarintField(15, 2); // version (field 15, LAST)
+ }
+ function writeFeature(context, pbf) {
+     const feature = context.feature;
