@@ -14,12 +14,17 @@ import {
   openPMtiles,
   pmtilesTester,
 } from "./pmtiles-adapter.js";
-// Import MBTiles adapter functions, tester, AND the metadata structure from openMBTiles
 import {
   openMBTiles,
   getMBTilesTile,
   mbtilesTester,
 } from "./mbtiles-adapter.js";
+import {
+  fetchSparseTile,
+  imageDataToBlob,
+  type SparseTileResult,
+  type ResamplingMethod,
+} from "./sparse-tile-adapter.js";
 
 import { getChildren } from "@mapbox/tilebelt";
 import path from "path";
@@ -85,7 +90,33 @@ program
     "The image format for generated blank tiles ('png', 'webp', or 'jpeg'). This is used as a fallback if the source format cannot be determined.",
     "png", // Default format for blank tiles
   )
-  // ADD THE VERBOSE OPTION HERE
+  .option(
+    "--useSparseMode",
+    "Enable sparse tile mode: upscale and crop lower zoom tiles instead of generating blank tiles when DEM tiles are missing.",
+  )
+  .option(
+    "--sparseResamplingMethod <string>",
+    "The resampling method used for upscaling sparse tiles ('nearest', 'bilinear', or 'bicubic').",
+    (value) => {
+      if (value !== "nearest" && value !== "bilinear" && value !== "bicubic") {
+        throw new Error(
+          "Invalid value for --sparseResamplingMethod, must be 'nearest', 'bilinear', or 'bicubic'",
+        );
+      }
+      return value;
+    },
+    "bicubic", // default value
+  )
+  .option(
+    "--sparseMaxZoomFallback <number>",
+    "Maximum number of zoom levels to fallback when searching for sparse tiles.",
+    "3"
+  )
+  .option(
+    "--sparseTimeoutMs <number>",
+    "Timeout in milliseconds for sparse tile fetch attempts.",
+    "5000"
+  )
   .option("-v, --verbose", "Enable verbose output.")
   .parse(process.argv);
 
@@ -103,7 +134,11 @@ const {
   outputDir,
   blankTileSize,
   blankTileFormat,
-  verbose, // Capture the verbose option
+  useSparseMode,
+  sparseResamplingMethod,
+  sparseMaxZoomFallback,
+  sparseTimeoutMs,
+  verbose,
 } = options;
 
 const numX = Number(x);
@@ -114,11 +149,23 @@ const numsourceMaxZoom = Number(sourceMaxZoom);
 const numIncrement = Number(increment);
 const numoutputMaxZoom = Number(outputMaxZoom);
 const numblankTileSize = Number(blankTileSize);
+const numSparseMaxZoomFallback = Number(sparseMaxZoomFallback);
+const numSparseTimeoutMs = Number(sparseTimeoutMs);
 
 const validBlankTileFormats = ["png", "webp", "jpeg"];
 if (!validBlankTileFormats.includes(blankTileFormat)) {
   console.error(
     `Invalid value for --blankTileFormat: ${blankTileFormat}. Must be one of: ${validBlankTileFormats.join(
+      ", ",
+    )}`,
+  );
+  process.exit(1);
+}
+
+const validSparseResamplingMethods = ["nearest", "bilinear", "bicubic"];
+if (!validSparseResamplingMethods.includes(sparseResamplingMethod)) {
+  console.error(
+    `Invalid value for --sparseResamplingMethod: ${sparseResamplingMethod}. Must be one of: ${validSparseResamplingMethods.join(
       ", ",
     )}`,
   );
@@ -225,9 +272,58 @@ const pmtilesFetcher: TileFetcher = async (
   );
 
   if (!zxyTileData) {
-    console.warn(
-      `DEM tile not found for ${url} (z:${zxy.z}, x:${zxy.x}, y:${zxy.y}). Generating blank tile.`,
-    );
+    if (useSparseMode) {
+      if (verbose) {
+        console.log(
+          `[Fetcher] DEM tile not found for ${url}, attempting sparse tile fetch`,
+        );
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), numSparseTimeoutMs);
+
+      try {
+        const sparseResult = await fetchSparseTile(
+          zxy.z,
+          zxy.x,
+          zxy.y,
+          numblankTileSize,
+          pmtilesFetcher,
+          demUrlPattern || "",
+          sparseResamplingMethod,
+          verbose,
+          numSparseMaxZoomFallback
+        );
+        clearTimeout(timeout);
+
+        if (sparseResult) {
+          if (verbose) {
+            console.log(`[Fetcher] Successfully created sparse tile for ${url}`);
+          }
+
+          const sourceMimeType = pmtilesMimeType || `image/${blankTileFormat}`;
+          const formatForSparse = sourceMimeType.split("/")[1] || blankTileFormat;
+          const blob = await imageDataToBlob(sparseResult.imageData, formatForSparse);
+
+          return {
+            data: blob,
+            mimeType: sourceMimeType,
+            expires: undefined,
+            cacheControl: undefined,
+          };
+        }
+      } catch (error: any) {
+        clearTimeout(timeout);
+        if (verbose) {
+          console.log(`[Fetcher] Sparse tile fetch timed out or failed: ${error.message}`);
+        }
+      }
+
+      if (verbose) {
+        console.log(`[Fetcher] No parent tiles found for sparse mode, falling back to blank tile`);
+      }
+    }
+
     const sourceMimeType = pmtilesMimeType || `image/${blankTileFormat}`;
     const formatForBlank = sourceMimeType.split("/")[1] || blankTileFormat;
 
@@ -239,7 +335,7 @@ const pmtilesFetcher: TileFetcher = async (
       formatForBlank as any,
     );
     return {
-      data: new Blob([blankTileBuffer], { type: sourceMimeType }),
+      data: new Blob([new Uint8Array(blankTileBuffer)], { type: sourceMimeType }),
       mimeType: sourceMimeType,
       expires: undefined,
       cacheControl: undefined,
@@ -283,11 +379,61 @@ const mbtilesFetcher: TileFetcher = async (
     );
 
     if (!tileData || !tileData.data) {
-      console.warn(
-        `DEM tile not found for ${url} (z:${zxy.z}, x:${zxy.x}, y:${zxy.y}). Generating blank tile.`,
-      );
-      const sourceFormat = mbtilesSource.metadata?.format || blankTileFormat;
+      // Tile not found - check if we should use sparse mode
+      if (useSparseMode) {
+        if (verbose) {
+          console.log(
+            `[Fetcher] DEM tile not found for ${url}, attempting sparse tile fetch`,
+          );
+        }
 
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), numSparseTimeoutMs);
+
+        try {
+          const sparseResult = await fetchSparseTile(
+            zxy.z,
+            zxy.x,
+            zxy.y,
+            numblankTileSize,
+            mbtilesFetcher,
+            demUrlPattern || "",
+            sparseResamplingMethod,
+            verbose,
+            numSparseMaxZoomFallback
+          );
+          clearTimeout(timeout);
+
+          if (sparseResult) {
+            if (verbose) {
+              console.log(`[Fetcher] Successfully created sparse tile for ${url}`);
+            }
+
+            const sourceFormat = mbtilesSource.metadata?.format || blankTileFormat;
+            const blob = await imageDataToBlob(sparseResult.imageData, sourceFormat);
+            const blobType = `image/${sourceFormat}`;
+
+            return {
+              data: blob,
+              mimeType: blobType,
+              expires: undefined,
+              cacheControl: undefined,
+            };
+          }
+        } catch (error: any) {
+          clearTimeout(timeout);
+          if (verbose) {
+            console.log(`[Fetcher] Sparse tile fetch timed out or failed: ${error.message}`);
+          }
+        }
+
+        if (verbose) {
+          console.log(`[Fetcher] No parent tiles found for sparse mode, falling back to blank tile`);
+        }
+      }
+
+      // Fall back to blank tile generation
+      const sourceFormat = mbtilesSource.metadata?.format || blankTileFormat;
       const blankTileBuffer = await createBlankTileImage(
         numblankTileSize,
         numblankTileSize,
@@ -297,7 +443,7 @@ const mbtilesFetcher: TileFetcher = async (
       );
       const blobType = `image/${sourceFormat}`;
       return {
-        data: new Blob([blankTileBuffer], { type: blobType }),
+        data: new Blob([new Uint8Array(blankTileBuffer)], { type: blobType }),
         mimeType: blobType,
         expires: undefined,
         cacheControl: undefined,
@@ -309,7 +455,7 @@ const mbtilesFetcher: TileFetcher = async (
       blobType = tileData.contentType;
     }
     return {
-      data: new Blob([tileData.data], { type: blobType }),
+      data: new Blob([new Uint8Array(tileData.data)], { type: blobType }),
       mimeType: blobType,
       expires: undefined,
       cacheControl: undefined,
@@ -319,11 +465,61 @@ const mbtilesFetcher: TileFetcher = async (
       error.message.includes("Tile does not exist") ||
       error.message.includes("no such row")
     ) {
-      console.warn(
-        `DEM tile not found for ${url} (z:${zxy.z}, x:${zxy.x}, y:${zxy.y}). Generating blank tile.`,
-      );
-      const sourceFormat = mbtilesSource.metadata?.format || blankTileFormat;
+      // Same sparse fallback logic as above
+      if (useSparseMode) {
+        if (verbose) {
+          console.log(
+            `[Fetcher] DEM tile not found for ${url}, attempting sparse tile fetch`,
+          );
+        }
 
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), numSparseTimeoutMs);
+
+        try {
+          const sparseResult = await fetchSparseTile(
+            zxy.z,
+            zxy.x,
+            zxy.y,
+            numblankTileSize,
+            mbtilesFetcher,
+            demUrlPattern || "",
+            sparseResamplingMethod,
+            verbose,
+            numSparseMaxZoomFallback
+          );
+          clearTimeout(timeout);
+
+          if (sparseResult) {
+            if (verbose) {
+              console.log(`[Fetcher] Successfully created sparse tile for ${url}`);
+            }
+
+            const sourceFormat = mbtilesSource.metadata?.format || blankTileFormat;
+            const blob = await imageDataToBlob(sparseResult.imageData, sourceFormat);
+            const blobType = `image/${sourceFormat}`;
+
+            return {
+              data: blob,
+              mimeType: blobType,
+              expires: undefined,
+              cacheControl: undefined,
+            };
+          }
+        } catch (error: any) {
+          clearTimeout(timeout);
+          if (verbose) {
+            console.log(`[Fetcher] Sparse tile fetch timed out or failed: ${error.message}`);
+          }
+        }
+
+        if (verbose) {
+          console.log(`[Fetcher] No parent tiles found for sparse mode, falling back to blank tile`);
+        }
+      }
+
+      // Fall back to blank tile generation
+      const sourceFormat = mbtilesSource.metadata?.format || blankTileFormat;
       const blankTileBuffer = await createBlankTileImage(
         numblankTileSize,
         numblankTileSize,
@@ -333,7 +529,7 @@ const mbtilesFetcher: TileFetcher = async (
       );
       const blobType = `image/${sourceFormat}`;
       return {
-        data: new Blob([blankTileBuffer], { type: blobType }),
+        data: new Blob([new Uint8Array(blankTileBuffer)], { type: blobType }),
         mimeType: blobType,
         expires: undefined,
         cacheControl: undefined,
