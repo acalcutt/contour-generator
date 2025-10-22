@@ -2,7 +2,7 @@
 
 import { Command } from "commander";
 import { writeFileSync, mkdir, existsSync } from "fs";
-import mlcontour from "maplibre-contour";
+import mlcontour from "@acalcutt/maplibre-contour";
 import {
   extractZXYFromUrlTrim,
   GetImageData,
@@ -23,7 +23,7 @@ import {
 
 import { getChildren } from "@mapbox/tilebelt";
 import path from "path";
-import type { Encoding } from "../node_modules/maplibre-contour/dist/types.d.ts";
+import type { Encoding } from "../node_modules/@acalcutt/maplibre-contour/dist/types.d.ts";
 import { type PMTiles } from "pmtiles";
 
 type Tile = [number, number, number];
@@ -85,6 +85,32 @@ program
     "The image format for generated blank tiles ('png', 'webp', or 'jpeg'). This is used as a fallback if the source format cannot be determined.",
     "png", // Default format for blank tiles
   )
+  // --- Smoothing Options ---
+  .option(
+    "--smooth <string>",
+    "Apply smoothing to contour lines: 'none', 'linear', 'chaikin', 'catmull-rom', or 'bezier'.",
+    (value) => {
+      const validValues = [
+        "none",
+        "linear",
+        "chaikin",
+        "catmull-rom",
+        "bezier",
+      ];
+      if (!validValues.includes(value)) {
+        throw new Error(
+          `Invalid value for --smooth, must be one of: ${validValues.join(", ")}`,
+        );
+      }
+      return value;
+    },
+    "none", // default value
+  )
+  .option(
+    "--smoothIterations <number>",
+    "Number of times to apply smoothing algorithm (default 1, higher = smoother but more processing).",
+    "1", // default value as a string
+  )
   // ADD THE VERBOSE OPTION HERE
   .option("-v, --verbose", "Enable verbose output.")
   .parse(process.argv);
@@ -103,6 +129,8 @@ const {
   outputDir,
   blankTileSize,
   blankTileFormat,
+  smooth,
+  smoothIterations,
   verbose, // Capture the verbose option
 } = options;
 
@@ -114,6 +142,7 @@ const numsourceMaxZoom = Number(sourceMaxZoom);
 const numIncrement = Number(increment);
 const numoutputMaxZoom = Number(outputMaxZoom);
 const numblankTileSize = Number(blankTileSize);
+const numSmoothIterations = Number(smoothIterations);
 
 const validBlankTileFormats = ["png", "webp", "jpeg"];
 if (!validBlankTileFormats.includes(blankTileFormat)) {
@@ -239,7 +268,9 @@ const pmtilesFetcher: TileFetcher = async (
       formatForBlank as any,
     );
     return {
-      data: new Blob([blankTileBuffer], { type: sourceMimeType }),
+      data: new Blob([new Uint8Array(blankTileBuffer)], {
+        type: sourceMimeType,
+      }),
       mimeType: sourceMimeType,
       expires: undefined,
       cacheControl: undefined,
@@ -297,7 +328,7 @@ const mbtilesFetcher: TileFetcher = async (
       );
       const blobType = `image/${sourceFormat}`;
       return {
-        data: new Blob([blankTileBuffer], { type: blobType }),
+        data: new Blob([new Uint8Array(blankTileBuffer)], { type: blobType }),
         mimeType: blobType,
         expires: undefined,
         cacheControl: undefined,
@@ -309,7 +340,7 @@ const mbtilesFetcher: TileFetcher = async (
       blobType = tileData.contentType;
     }
     return {
-      data: new Blob([tileData.data], { type: blobType }),
+      data: new Blob([new Uint8Array(tileData.data)], { type: blobType }),
       mimeType: blobType,
       expires: undefined,
       cacheControl: undefined,
@@ -333,7 +364,7 @@ const mbtilesFetcher: TileFetcher = async (
       );
       const blobType = `image/${sourceFormat}`;
       return {
-        data: new Blob([blankTileBuffer], { type: blobType }),
+        data: new Blob([new Uint8Array(blankTileBuffer)], { type: blobType }),
         mimeType: blobType,
         expires: undefined,
         cacheControl: undefined,
@@ -393,6 +424,8 @@ const demManagerOptions = {
   decodeImage: GetImageData,
   demUrlPattern: demUrlPattern, // Pass the determined pattern
   getTile: currentFetcher, // Pass the appropriate fetcher function
+  smooth: smooth as "none" | "linear" | "chaikin" | "catmull-rom" | "bezier",
+  smoothIterations: numSmoothIterations,
 };
 
 const manager = demUrlPattern

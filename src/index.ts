@@ -23,6 +23,8 @@ type BaseOptions = {
   blankTileNoDataValue: number;
   blankTileSize: number;
   blankTileFormat: string;
+  smooth: "none" | "linear" | "chaikin" | "catmull-rom" | "bezier";
+  smoothIterations: number;
 };
 
 type PyramidOptions = BaseOptions & {
@@ -52,6 +54,18 @@ function validateEncoding(
   if (encoding !== "mapbox" && encoding !== "terrarium") {
     throw new Error(
       `Encoding must be either "mapbox" or "terrarium", got ${encoding}`,
+    );
+  }
+}
+
+// Helper function to validate smooth
+function validateSmooth(
+  smooth: string,
+): asserts smooth is BaseOptions["smooth"] {
+  const validValues = ["none", "linear", "chaikin", "catmull-rom", "bezier"];
+  if (!validValues.includes(smooth)) {
+    throw new Error(
+      `Invalid value for --smooth, must be one of: ${validValues.join(", ")}`,
     );
   }
 }
@@ -110,6 +124,7 @@ async function processTile(options: PyramidOptions): Promise<void> {
   }
 
   validateEncoding(options.encoding);
+  validateSmooth(options.smooth);
 
   return new Promise((resolve, reject) => {
     // Path to the generate-contour-tile-pyramid.js script in the same directory
@@ -147,6 +162,10 @@ async function processTile(options: PyramidOptions): Promise<void> {
       options.blankTileSize.toString(),
       "--blankTileFormat",
       options.blankTileFormat,
+      "--smooth",
+      options.smooth,
+      "--smoothIterations",
+      options.smoothIterations.toString(),
     ];
 
     // Pass the verbose flag down to the child process ONLY if the orchestrator is verbose
@@ -168,19 +187,9 @@ async function processTile(options: PyramidOptions): Promise<void> {
     workerProcess.stdout.on("data", (data) => {
       stdoutBuffer += data.toString();
       // Process captured output if orchestrator is verbose.
-      // We trust the child process to handle its own verbose output; this capture
-      // is mainly for potential error logging or if the child isn't verbose.
       if (options.verbose) {
         const lines = stdoutBuffer.split("\n");
         stdoutBuffer = lines.pop() || ""; // Keep the last (potentially partial) line
-        // Log with orchestrator's prefix, but only if it's not already verbose output from child
-        // This is still tricky. The robust solution is to NOT log here and let the child's verbose logs appear.
-        // However, for debugging purposes, logging captured data is useful.
-        // The duplicate "Starting..." and "Finished..." are from the orchestrator's own handlers.
-        // We should avoid double-logging the CHILD's output.
-        //
-        // For now, let's keep the logging here, but be aware it might duplicate child's --verbose output.
-        // The FIX for the "Starting..." and "Finished..." duplication is in the orchestrator handlers themselves.
         lines.forEach((line) => console.log(processPrefix + line.trim()));
       }
     });
@@ -419,13 +428,11 @@ async function main(): Promise<void> {
     | ParsedOptionConfig;
 
   const commonOptionConfigs: OptionConfig[] = [
-    // required options
     {
       type: "required",
       flags: "--demUrl <string>",
       description: "The URL of the DEM source.",
     },
-    // standard options (string/boolean only)
     {
       type: "standard",
       flags: "--encoding <string>",
@@ -452,7 +459,6 @@ async function main(): Promise<void> {
       description: "Enable verbose output",
       defaultValue: false,
     },
-    // parsed options (numbers that need parsing)
     {
       type: "parsed",
       flags: "--sourceMaxZoom <number>",
@@ -495,6 +501,21 @@ async function main(): Promise<void> {
       description: "The pixel dimension of the tiles (e.g., 256 or 512).",
       parser: Number,
       defaultValue: 512,
+    },
+    {
+      type: "standard",
+      flags: "--smooth <string>",
+      description:
+        "Apply smoothing to contour lines: 'none', 'linear', 'chaikin', 'catmull-rom', or 'bezier'.",
+      defaultValue: "none",
+    },
+    {
+      type: "parsed",
+      flags: "--smoothIterations <number>",
+      description:
+        "Number of times to apply smoothing algorithm (default 1, higher = smoother but more processing).",
+      parser: Number,
+      defaultValue: 1,
     },
   ];
 
@@ -578,8 +599,22 @@ async function main(): Promise<void> {
           config.defaultValue,
         );
       } else {
-        // This is a StandardOptionConfig - string/boolean only
-        command.option(config.flags, config.description, config.defaultValue);
+        // This handles StandardOptionConfig (string/boolean only)
+        if (config.flags.startsWith("--smooth")) {
+          // Custom parser for smooth option
+          command.option(
+            config.flags,
+            config.description,
+            (value) => {
+              validateSmooth(value);
+              return value;
+            },
+            config.defaultValue,
+          );
+        } else {
+          // Standard string/boolean options
+          command.option(config.flags, config.description, config.defaultValue);
+        }
       }
     }
   };
@@ -591,7 +626,7 @@ async function main(): Promise<void> {
 
   // --- Set up action handlers (after options are defined) ---
   pyramidCmd.action(async (options: PyramidOptions) => {
-    await runPyramid(options);
+    await runPyramid(options as Required<PyramidOptions>);
   });
 
   zoomCmd.action(async (options: ZoomOptions) => {
