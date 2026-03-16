@@ -23,6 +23,8 @@ type BaseOptions = {
   blankTileNoDataValue: number;
   blankTileSize: number;
   blankTileFormat: string;
+  smooth: "none" | "linear" | "chaikin" | "catmull-rom" | "bezier";
+  smoothIterations: number;
 };
 
 type PyramidOptions = BaseOptions & {
@@ -42,19 +44,6 @@ type BboxOptions = BaseOptions & {
   maxy: number;
   outputMinZoom: number;
 };
-
-/**
- * Helper function to validate encoding
- */
-function validateEncoding(
-  encoding: string,
-): asserts encoding is "mapbox" | "terrarium" {
-  if (encoding !== "mapbox" && encoding !== "terrarium") {
-    throw new Error(
-      `Encoding must be either "mapbox" or "terrarium", got ${encoding}`,
-    );
-  }
-}
 
 /**
  * Function to create metadata.json
@@ -109,8 +98,6 @@ async function processTile(options: PyramidOptions): Promise<void> {
     );
   }
 
-  validateEncoding(options.encoding);
-
   return new Promise((resolve, reject) => {
     // Path to the generate-contour-tile-pyramid.js script in the same directory
     const scriptPath = path.join(__dirname, "generate-contour-tile-pyramid.js");
@@ -147,40 +134,32 @@ async function processTile(options: PyramidOptions): Promise<void> {
       options.blankTileSize.toString(),
       "--blankTileFormat",
       options.blankTileFormat,
+      "--smooth",
+      options.smooth,
+      "--smoothIterations",
+      options.smoothIterations.toString(),
     ];
 
-    // Pass the verbose flag down to the child process ONLY if the orchestrator is verbose
     if (options.verbose) {
       commandArgs.push("--verbose"); // Pass the verbose flag to the child
     }
 
     const workerProcess = spawn("node", commandArgs, {
       stdio: ["ignore", "pipe", "pipe"], // Capture stdout and stderr
-      shell: true, // Use false for better security and performance
+      shell: true,
     });
 
     const processPrefix = `[Tile ${options.z}-${options.x}-${options.y}] `;
 
-    // Buffering for verbose output to prevent flooding the console and consuming excessive memory
+    // Buffering for verbose output
     let stdoutBuffer = "";
     let stderrBuffer = "";
 
     workerProcess.stdout.on("data", (data) => {
       stdoutBuffer += data.toString();
-      // Process captured output if orchestrator is verbose.
-      // We trust the child process to handle its own verbose output; this capture
-      // is mainly for potential error logging or if the child isn't verbose.
       if (options.verbose) {
         const lines = stdoutBuffer.split("\n");
-        stdoutBuffer = lines.pop() || ""; // Keep the last (potentially partial) line
-        // Log with orchestrator's prefix, but only if it's not already verbose output from child
-        // This is still tricky. The robust solution is to NOT log here and let the child's verbose logs appear.
-        // However, for debugging purposes, logging captured data is useful.
-        // The duplicate "Starting..." and "Finished..." are from the orchestrator's own handlers.
-        // We should avoid double-logging the CHILD's output.
-        //
-        // For now, let's keep the logging here, but be aware it might duplicate child's --verbose output.
-        // The FIX for the "Starting..." and "Finished..." duplication is in the orchestrator handlers themselves.
+        stdoutBuffer = lines.pop() || "";
         lines.forEach((line) => console.log(processPrefix + line.trim()));
       }
     });
@@ -195,7 +174,6 @@ async function processTile(options: PyramidOptions): Promise<void> {
     });
 
     workerProcess.on("close", (code) => {
-      // Flush any remaining buffered data if verbose, primarily for error reporting
       if (options.verbose) {
         if (stdoutBuffer) console.log(processPrefix + stdoutBuffer.trim());
         if (stderrBuffer) console.error(processPrefix + stderrBuffer.trim());
@@ -203,11 +181,10 @@ async function processTile(options: PyramidOptions): Promise<void> {
 
       if (code === 0) {
         if (options.verbose) {
-          console.log(processPrefix + "Finished successfully."); // Orchestrator's own status message
+          console.log(processPrefix + "Finished successfully.");
         }
         resolve();
       } else {
-        // Reject with a more informative error, including stderr content
         reject(
           new Error(
             `${processPrefix}Exited with code ${code}. Captured stderr: "${stderrBuffer.trim()}"`,
@@ -227,9 +204,6 @@ async function processTile(options: PyramidOptions): Promise<void> {
 /**
  * Manages a pool of worker processes to execute tasks concurrently,
  * ensuring no more than `maxProcesses` are running at any time.
- * @param coordinates - Array of [z, x, y] tuples representing tiles to process.
- * @param options - Base options to pass to each tile processing job.
- * @param maxProcesses - The maximum number of parallel processes to run.
  */
 async function processTilesInParallel(
   coordinates: Array<[number, number, number]>,
@@ -252,13 +226,11 @@ async function processTilesInParallel(
 
   return new Promise((resolve, reject) => {
     const scheduleNextTile = () => {
-      // If all tasks are assigned and all active workers have finished, we are done.
       if (currentIndex >= totalTiles && activeWorkers.length === 0) {
         console.log(`[Main] All ${totalTiles} tiles processed.`);
         return resolve();
       }
 
-      // While we have tasks left and the number of active workers is below the limit
       while (currentIndex < totalTiles && activeWorkers.length < maxProcesses) {
         const [z, x, y] = coordinates[currentIndex];
         const tileOptions: PyramidOptions = {
@@ -276,7 +248,6 @@ async function processTilesInParallel(
           );
         }
 
-        // Create a promise for this tile's processing
         const tilePromise = processTile(tileOptions)
           .then(() => {
             completedCount++;
@@ -291,15 +262,13 @@ async function processTilesInParallel(
               `[Main] Error processing tile ${z}-${x}-${y}:`,
               error,
             );
-            reject(error); // Reject the main promise if any tile fails
+            reject(error);
           })
           .finally(() => {
-            // Remove this worker from the active pool
             const index = activeWorkers.indexOf(tilePromise);
             if (index > -1) {
               activeWorkers.splice(index, 1);
             }
-            // Try to schedule the next available tile
             scheduleNextTile();
           });
 
@@ -307,7 +276,6 @@ async function processTilesInParallel(
       }
     };
 
-    // Start the initial batch of workers
     scheduleNextTile();
   });
 }
@@ -413,10 +381,19 @@ async function main(): Promise<void> {
     defaultValue: number;
   };
 
+  type CustomParserOptionConfig = {
+    type: "custom-parser";
+    flags: string;
+    description: string;
+    parser: (value: string) => string;
+    defaultValue: string;
+  };
+
   type OptionConfig =
     | RequiredOptionConfig
     | StandardOptionConfig
-    | ParsedOptionConfig;
+    | ParsedOptionConfig
+    | CustomParserOptionConfig;
 
   const commonOptionConfigs: OptionConfig[] = [
     // required options
@@ -427,10 +404,18 @@ async function main(): Promise<void> {
     },
     // standard options (string/boolean only)
     {
-      type: "standard",
+      type: "custom-parser",
       flags: "--encoding <string>",
       description:
         'The encoding of the source DEM (e.g., "terrarium", "mapbox").',
+      parser: (value: string) => {
+        if (value !== "mapbox" && value !== "terrarium") {
+          throw new Error(
+            `Encoding must be either "mapbox" or "terrarium", got ${value}`,
+          );
+        }
+        return value;
+      },
       defaultValue: "mapbox",
     },
     {
@@ -495,6 +480,36 @@ async function main(): Promise<void> {
       description: "The pixel dimension of the tiles (e.g., 256 or 512).",
       parser: Number,
       defaultValue: 512,
+    },
+    {
+      type: "custom-parser",
+      flags: "--smooth <string>",
+      description:
+        "Apply smoothing to contour lines: 'none', 'linear', 'chaikin', 'catmull-rom', or 'bezier'.",
+      parser: (value: string) => {
+        const validValues = [
+          "none",
+          "linear",
+          "chaikin",
+          "catmull-rom",
+          "bezier",
+        ];
+        if (!validValues.includes(value)) {
+          throw new Error(
+            `Invalid value for --smooth, must be one of: ${validValues.join(", ")}`,
+          );
+        }
+        return value;
+      },
+      defaultValue: "none",
+    },
+    {
+      type: "parsed",
+      flags: "--smoothIterations <number>",
+      description:
+        "Number of times to apply smoothing algorithm (default 1, higher = smoother but more processing).",
+      parser: Number,
+      defaultValue: 1,
     },
   ];
 
@@ -569,8 +584,7 @@ async function main(): Promise<void> {
     for (const config of configs) {
       if (config.type === "required") {
         command.requiredOption(config.flags, config.description);
-      } else if (config.type === "parsed") {
-        // This is a ParsedOptionConfig - needs parser
+      } else if (config.type === "parsed" || config.type === "custom-parser") {
         command.option(
           config.flags,
           config.description,
@@ -578,7 +592,7 @@ async function main(): Promise<void> {
           config.defaultValue,
         );
       } else {
-        // This is a StandardOptionConfig - string/boolean only
+        // This handles StandardOptionConfig (string/boolean only)
         command.option(config.flags, config.description, config.defaultValue);
       }
     }
@@ -591,7 +605,7 @@ async function main(): Promise<void> {
 
   // --- Set up action handlers (after options are defined) ---
   pyramidCmd.action(async (options: PyramidOptions) => {
-    await runPyramid(options);
+    await runPyramid(options as Required<PyramidOptions>);
   });
 
   zoomCmd.action(async (options: ZoomOptions) => {
