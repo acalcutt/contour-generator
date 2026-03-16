@@ -185,7 +185,7 @@ The tool generates:
 
 ### Converting to MBTiles or PMTiles
 
-Use [mbutil](https://github.com/TechIdiots-LLC/mbutil) to convert the output directory into MBTiles or PMTiles archives.
+Use [TechIdiots-LLC/mbutil](https://github.com/TechIdiots-LLC/mbutil) to convert the output directory into MBTiles or PMTiles archives.
 
 **Option A: Install from source**
 ```bash
