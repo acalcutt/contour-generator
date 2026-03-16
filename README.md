@@ -183,13 +183,30 @@ The tool generates:
 - **Tile files**: `output/{z}/{x}/{y}.pbf` - Vector tiles containing contour lines
 - **Metadata**: `metadata.json` - Tile set information
 
-### Converting to MBTiles
+### Converting to MBTiles or PMTiles
+
+Use [mbutil](https://github.com/TechIdiots-LLC/mbutil) to convert the output directory into MBTiles or PMTiles archives.
+
+**Option A: Install from source**
 ```bash
-# Install mbutil (Python package)
-pip install mbutil
+git clone --recursive https://github.com/TechIdiots-LLC/mbutil.git
+cd mbutil
+sudo python3 setup.py install
 
 # Convert directory to MBTiles
-mb-util --image_format=pbf ./output contours.mbtiles
+mb-util --image_format=pbf --do_compression ./output contours.mbtiles
+
+# Or convert directory to PMTiles
+mb-util --image_format=pbf ./output contours.pmtiles
+```
+
+**Option B: Use Docker**
+```bash
+# Convert directory to MBTiles
+docker run -v $(pwd):/data wifidb/mbutil --image_format=pbf --do_compression /data/output /data/contours.mbtiles
+
+# Or convert directory to PMTiles
+docker run -v $(pwd):/data wifidb/mbutil --image_format=pbf /data/output /data/contours.pmtiles
 ```
 
 ### Viewing in a web map
