@@ -202,11 +202,14 @@ mb-util --image_format=pbf ./output contours.pmtiles
 
 **Option B: Use Docker**
 ```bash
+# Pull the latest version
+docker pull wifidb/mbutil
+
 # Convert directory to MBTiles
-docker run -v $(pwd):/data wifidb/mbutil --image_format=pbf --do_compression /data/output /data/contours.mbtiles
+docker run -v $(pwd):/data wifidb/mbutil --image_format pbf --do_compression /data/output /data/contours.mbtiles
 
 # Or convert directory to PMTiles
-docker run -v $(pwd):/data wifidb/mbutil --image_format=pbf /data/output /data/contours.pmtiles
+docker run -v $(pwd):/data wifidb/mbutil --image_format pbf /data/output /data/contours.pmtiles
 ```
 
 ### Viewing in a web map
