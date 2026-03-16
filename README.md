@@ -191,7 +191,7 @@ Use [TechIdiots-LLC/mbutil](https://github.com/TechIdiots-LLC/mbutil) to convert
 ```bash
 git clone --recursive https://github.com/TechIdiots-LLC/mbutil.git
 cd mbutil
-sudo python3 setup.py install
+pip install .
 
 # Convert directory to MBTiles
 mb-util --image_format=pbf --do_compression ./output contours.mbtiles
