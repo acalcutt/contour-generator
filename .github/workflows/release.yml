@@ -25,7 +25,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version-file: 'package.json'
+          node-version: '24'
           check-latest: true
           cache: 'npm'
 
@@ -106,7 +106,7 @@ jobs:
       - name: Setup node env 📦
         uses: actions/setup-node@v6
         with:
-          node-version-file: 'package.json'
+          node-version: '24'
           check-latest: true
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'

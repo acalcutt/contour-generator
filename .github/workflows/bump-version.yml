@@ -26,6 +26,8 @@ jobs:
     defaults:
       run:
         shell: bash
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v6
         with:
@@ -34,7 +36,7 @@ jobs:
       - name: Setup node env 📦
         uses: actions/setup-node@v6
         with:
-          node-version-file: 'package.json'
+          node-version: '24'
           check-latest: true
           cache: 'npm'
       - name: Create bump script
@@ -217,6 +219,7 @@ jobs:
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v8
         with:
+          token: ${{ github.token }}
           commit-message: Release v${{ steps.version-details.outputs.version }}
           branch: release-v${{ steps.version-details.outputs.version }}
           title: Release v${{ steps.version-details.outputs.version }}
