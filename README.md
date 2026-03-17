@@ -128,7 +128,7 @@ When using Docker, map your local directory to `/data` inside the container:
 
 ```bash
 # Download test data
-wget https://github.com/acalcutt/contour_generator/releases/download/test_data/JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles
+wget https://github.com/TechIdiots-LLC/contour-generator/releases/download/test_data/JAXA_2024_terrainrgb_z0-Z7_webp.pmtiles
 
 # Run with Docker
 docker run --rm -v $(pwd):/data wifidb/contour-generator \
