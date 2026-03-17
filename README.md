@@ -20,7 +20,7 @@ npm install -g contour-generator
 ```bash
 contour-generator pyramid \
   --z 9 --x 272 --y 179 \
-  --demUrl "pmtiles://https://acalcutt.github.io/contour_generator/test_data/terrain-tiles.pmtiles" \
+  --demUrl "pmtiles://https://techidiots-llc.github.io/contour_generator/test_data/terrain-tiles.pmtiles" \
   --sourceMaxZoom 12 \
   --outputMaxZoom 15 \
   --outputDir "./my-contours"
@@ -46,7 +46,7 @@ contour-generator --help
 
 ### Option 2: Local Development
 ```bash
-git clone https://github.com/acalcutt/contour-generator.git
+git clone https://github.com/TechIdiots-LLC/contour-generator.git
 cd contour-generator
 npm install
 
@@ -84,7 +84,7 @@ The tool supports various elevation data sources:
 ```bash
 contour-generator pyramid \
   --z 9 --x 272 --y 179 \
-  --demUrl "pmtiles://https://acalcutt.github.io/contour_generator/test_data/terrain-tiles.pmtiles" \
+  --demUrl "pmtiles://https://techidiots-llc.github.io/contour_generator/test_data/terrain-tiles.pmtiles" \
   --sourceMaxZoom 12 \
   --encoding mapbox \
   --increment 50 \
